@@ -151,6 +151,7 @@ function register(socket) {
   socket.on('submitRouletteChoice', (choices) => {
     const roomCode = socket.data.roomCode;
     if (!roomCode) return;
+    if (!choices || typeof choices !== 'object') return;
 
     processRouletteChoice(roomCode, socket.id, choices);
   });
@@ -165,7 +166,7 @@ function register(socket) {
     const player = room.players[socket.id];
     if (!player || !player.spectator) return; // Only spectators can react
 
-    const { emoji } = data;
+    const { emoji } = data ?? {};
     if (!emoji || typeof emoji !== 'string') return;
 
     // Rate limiting

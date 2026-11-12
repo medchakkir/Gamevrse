@@ -464,7 +464,7 @@ socket.on('toggleReady', () => {
 
   // 🤖 NEW: Handle practice mode creation
   socket.on('createPracticeRoom', (settings) => {
-    const { botCount, difficulty, eliminationMode } = settings;
+    const { botCount, difficulty, eliminationMode } = settings ?? {};
     
     if (!botCount || botCount < 1 || botCount > 5) return;
     if (!['easy', 'normal', 'hard'].includes(difficulty)) return;

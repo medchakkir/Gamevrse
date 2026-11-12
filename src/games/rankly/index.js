@@ -2,7 +2,13 @@
 // index.js — Main server entry point
 // =============================================================
 
+import { createRequire } from "module";
 import { nanoid } from "nanoid";
+
+const { cleanName, cleanHexColor } = createRequire(import.meta.url)("../../shared/validate.js");
+
+const DEFAULT_AVATAR_COLOR = "#4d73ff";
+const DEFAULT_AVATAR_TEXT_COLOR = "#ffffff";
 
 // Import configuration
 import { DEFAULT_RULES } from "./config.js";
@@ -67,7 +73,12 @@ const onConnection = socket => {
   // -----------------------------------------------------------
   // CREATE ROOM
   // -----------------------------------------------------------
-  socket.on("create_room", ({ name, avatarColor, avatarTextColor, mode }, cb) => {
+  socket.on("create_room", (payload, cb) => {
+    const { mode } = payload ?? {};
+    if (typeof cb !== 'function') cb = () => {};
+    const name = cleanName(payload?.name) || `Player-${socket.id.slice(0, 4)}`;
+    const avatarColor = cleanHexColor(payload?.avatarColor, DEFAULT_AVATAR_COLOR);
+    const avatarTextColor = cleanHexColor(payload?.avatarTextColor, DEFAULT_AVATAR_TEXT_COLOR);
     // prevent double room
     for (const rid in rooms)
       if (rooms[rid].players[socket.id])
@@ -141,7 +152,12 @@ const onConnection = socket => {
   // -----------------------------------------------------------
   // JOIN ROOM
   // -----------------------------------------------------------
-  socket.on("join_room", ({ roomId, name, avatarColor, avatarTextColor }, cb) => {
+  socket.on("join_room", (payload, cb) => {
+    const { roomId } = payload ?? {};
+    if (typeof cb !== 'function') cb = () => {};
+    const name = cleanName(payload?.name) || `Player-${socket.id.slice(0, 4)}`;
+    const avatarColor = cleanHexColor(payload?.avatarColor, DEFAULT_AVATAR_COLOR);
+    const avatarTextColor = cleanHexColor(payload?.avatarTextColor, DEFAULT_AVATAR_TEXT_COLOR);
     const room = rooms[roomId];
     if (!room) return cb({ ok:false, error:"Room not found" });
 
@@ -209,7 +225,8 @@ const onConnection = socket => {
   // -----------------------------------------------------------
   // EXIT ROOM
   // -----------------------------------------------------------
-  socket.on("leave_room", ({ roomId }) => {
+  socket.on("leave_room", (payload) => {
+    const { roomId } = payload ?? {};
     const room = rooms[roomId];
     if (!room || !room.players[socket.id])
       return socket.emit("left_room", { ok:false, error:"not_in_room" });
@@ -316,7 +333,8 @@ const onConnection = socket => {
   // -----------------------------------------------------------
   // HOST CLOSES ROOM
   // -----------------------------------------------------------
-  socket.on("close_room", ({ roomId }) => {
+  socket.on("close_room", (payload) => {
+    const { roomId } = payload ?? {};
     const room = rooms[roomId];
     if (!room) return;
 
@@ -341,7 +359,8 @@ const onConnection = socket => {
   // -----------------------------------------------------------
   // HOST KICKS PLAYER (FIXED & SAFE)
   // -----------------------------------------------------------
-  socket.on("kick_player", ({ roomId, targetSocketId }) => {
+  socket.on("kick_player", (payload) => {
+    const { roomId, targetSocketId } = payload ?? {};
     const room = rooms[roomId];
     if (!room) return;
 
@@ -419,7 +438,8 @@ const onConnection = socket => {
   // -----------------------------------------------------------
   // READY TOGGLE
   // -----------------------------------------------------------
-  socket.on("toggle_ready", ({ roomId, ready }) => {
+  socket.on("toggle_ready", (payload) => {
+    const { roomId, ready } = payload ?? {};
     const room = rooms[roomId];
     if (!room) return;
     if (socket.id === room.hostSocketId) return;
@@ -456,7 +476,10 @@ const onConnection = socket => {
     }
   });
 
-  socket.on("update_avatar", ({ roomId, avatarColor, avatarTextColor }) => {
+  socket.on("update_avatar", (payload) => {
+    const { roomId } = payload ?? {};
+    const avatarColor = cleanHexColor(payload?.avatarColor, DEFAULT_AVATAR_COLOR);
+    const avatarTextColor = cleanHexColor(payload?.avatarTextColor, DEFAULT_AVATAR_TEXT_COLOR);
     const room = rooms[roomId];
     // ✅ Allow avatar updates in lobby or game_ended state
     if (!room || (room.state !== "lobby" && room.state !== "game_ended")) return;
@@ -471,7 +494,9 @@ const onConnection = socket => {
   // -----------------------------------------------------------
   // SUBMIT ANSWER (PLAYER TURN)
   // -----------------------------------------------------------
-  socket.on("submit_answer", ({ roomId, roundId, answer }, cb = () => {}) => {
+  socket.on("submit_answer", (payload, cb) => {
+    const { roomId, roundId, answer } = payload ?? {};
+    if (typeof cb !== 'function') cb = () => {};
     const room = rooms[roomId];
     if (!room || !room.round) {
       return cb({ ok: false, error: "no_round" });
@@ -521,7 +546,8 @@ const onConnection = socket => {
   // -----------------------------------------------------------
   // START GAME (HOST)
   // -----------------------------------------------------------
-  socket.on("start_game", ({ roomId, question, customQuestions, minPlayers, turnTime, multiplier, numRounds }) => {
+  socket.on("start_game", (payload) => {
+    const { roomId, question, customQuestions, minPlayers, turnTime, multiplier, numRounds } = payload ?? {};
     const room = rooms[roomId];
     if (!room) return;
     if (socket.id !== room.hostSocketId) return;
@@ -601,7 +627,8 @@ const onConnection = socket => {
   // -----------------------------------------------------------
   // CANCEL START (HOST)
   // -----------------------------------------------------------
-  socket.on("cancel_start", ({ roomId }) => {
+  socket.on("cancel_start", (payload) => {
+    const { roomId } = payload ?? {};
     const room = rooms[roomId];
     if (!room) return;
     if (socket.id !== room.hostSocketId) return;
@@ -612,7 +639,8 @@ const onConnection = socket => {
   // -----------------------------------------------------------
   // SUBMIT RANK (HOST)
   // -----------------------------------------------------------
-  socket.on("submit_rank", ({ roomId, roundId, ranks }) => {
+  socket.on("submit_rank", (payload) => {
+    const { roomId, roundId, ranks } = payload ?? {};
     const room = rooms[roomId];
     if (!room) return;
     // Only the judge can submit rankings
@@ -624,7 +652,8 @@ const onConnection = socket => {
   // -----------------------------------------------------------
   // HOST NEXT ROUND
   // -----------------------------------------------------------
-  socket.on("host_next_round", ({ roomId }) => {
+  socket.on("host_next_round", (payload) => {
+    const { roomId } = payload ?? {};
     const room = rooms[roomId];
     if (!room || socket.id !== room.hostSocketId) return;
 
@@ -640,7 +669,8 @@ const onConnection = socket => {
     wrappedStartRoundNow(roomId);
   });
 
-  socket.on("host_end_game", ({ roomId }) => {
+  socket.on("host_end_game", (payload) => {
+    const { roomId } = payload ?? {};
     const room = rooms[roomId];
     if (!room || socket.id !== room.hostSocketId) return;
 
@@ -688,7 +718,8 @@ const onConnection = socket => {
   // -----------------------------------------------------------
   // CHAT (simple anti-spam included)
   // -----------------------------------------------------------
-  socket.on("chat_message", ({ roomId, text } = {}) => {
+  socket.on("chat_message", (payload) => {
+    const { roomId, text } = payload ?? {};
     const now = Date.now();
     if (now - (chatTimestamps[socket.id] || 0) < 500) return;
     chatTimestamps[socket.id] = now;
@@ -716,7 +747,8 @@ const onConnection = socket => {
   // -----------------------------------------------------------
   // MANUAL EXIT TO LOBBY (Exit to Room button)
   // -----------------------------------------------------------
-  socket.on("manual_exit_to_lobby", ({ roomId }) => {
+  socket.on("manual_exit_to_lobby", (payload) => {
+    const { roomId } = payload ?? {};
     const room = rooms[roomId];
     if (!room || !room.players[socket.id]) return;
     
@@ -752,7 +784,9 @@ const onConnection = socket => {
   // -----------------------------------------------------------
   // ATTEMPT RECONNECT
   // -----------------------------------------------------------
-  socket.on("attempt_reconnect", ({ roomId, playerToken }, cb) => {
+  socket.on("attempt_reconnect", (payload, cb) => {
+    const { roomId, playerToken } = payload ?? {};
+    if (typeof cb !== 'function') cb = () => {};
     const result = attemptReconnect(socket, roomId, playerToken, rooms, io, buildRoomSnapshot);
     cb(result);
   });
