@@ -1,20 +1,28 @@
 {
   "name": "gamevrse",
   "version": "1.0.0",
-  "description": "Multiplayer game hub with various games",
-  "main": "server.js",
+  "description": "Multiplayer party game hub: ColorRush, Rankly and Blackjack",
+  "main": "src/server.js",
   "scripts": {
-    "start": "node server-homepage-blackjack.js",
-    "start:server1": "node server-homepage-blackjack.js",
-    "start:server2": "node server-colorrush-rankly.js",
-    "dev": "node server-homepage-blackjack.js"
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test --test-force-exit tests/*.test.js",
+    "lint": "eslint .",
+    "format": "prettier --write ."
   },
   "keywords": ["games", "multiplayer", "socket.io"],
-  "author": "",
   "license": "ISC",
+  "engines": { "node": ">=20" },
   "dependencies": {
+    "compression": "^1.8.0",
     "express": "^5.1.0",
-    "socket.io": "^4.8.1",
-    "nanoid": "^5.1.6"
+    "nanoid": "^5.1.6",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "globals": "^15.0.0",
+    "prettier": "^3.3.0",
+    "socket.io-client": "^4.8.1"
   }
 }
