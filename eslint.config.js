@@ -18,11 +18,11 @@ module.exports = [
   },
   {
     files: ['public/**/*.js'],
-    languageOptions: { sourceType: 'script', ecmaVersion: 2023, globals: { ...globals.browser, io: 'readonly', confetti: 'readonly' } },
+    languageOptions: { sourceType: 'script', ecmaVersion: 2023, globals: { ...globals.browser, io: 'readonly', confetti: 'readonly', showError: 'readonly', showConfirm: 'readonly' } },
     rules: { 'no-undef': 'error' },
   },
   {
-    files: ['public/games/rankly/client.js'],
+    files: ['public/games/rankly/client.js', 'public/games/colorrush/client.js'],
     rules: { 'no-undef': 'warn' },
   },
   {
