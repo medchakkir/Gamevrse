@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ColorRush</title>
+  <link rel="stylesheet" href="/games/colorrush/style.css">
+</head>
+<body>
+  <!-- Intro / Lobby -->
+  <div id="introScreen" class="intro-visible" aria-hidden="false">
+    <div class="intro-background">
+      <div class="glow-orb glow-orb-1"></div>
+      <div class="glow-orb glow-orb-2"></div>
+      <div class="glow-orb glow-orb-3"></div>
+    </div>
+    
+    <div id="introContent" role="dialog" aria-label="ColorRush lobby">
+      <!-- Logo Section -->
+      <div class="logo-section">
+        <div class="logo-icon">🎮</div>
+        <h1 id="titleHeading">ColorRush</h1>
+        <p class="game-subtitle">Memory • Speed • Competition</p>
+      </div>
+
+      <!-- Name Input Section -->
+      <div class="input-section">
+        <div class="input-container">
+          <input id="nameInput" type="text" placeholder=" " aria-label="Your name" required />
+          <label for="nameInput" class="floating-label">Enter your name</label>
+          <div class="input-glow"></div>
+        </div>
+      </div>
+
+      <!-- Primary Actions -->
+      <div class="actions-section">
+        <div class="primary-actions">
+          <button id="createRoomBtn" class="btn-primary btn-large create-room-btn">
+            <span class="btn-text">Create Room</span>
+          </button>
+          <button id="joinRoomBtn" class="btn-primary btn-large join-room-btn">
+            <span class="btn-text">Join Room</span>
+          </button>
+        </div>
+
+        <!-- Secondary Actions -->
+        <div class="secondary-actions">
+          <button id="practiceBtn" class="btn-secondary practice-btn" title="Start single-player practice">
+            <span class="btn-icon">⚡</span>
+            <span class="btn-text">Practice</span>
+          </button>
+          <button id="howToBtn" class="btn-secondary how-to-btn" aria-expanded="false" aria-controls="howToContent">
+            <span class="btn-text">How to Play</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- How To Content -->
+      <div id="howToContent" class="howto" aria-hidden="true">
+        <div class="howto-content">
+          <h4>Game Rules</h4>
+          <ul>
+            <li><strong>Watch</strong> the color & sound sequence carefully</li>
+            <li><strong>Remember</strong> the pattern - it gets longer each round</li>
+            <li><strong>Repeat</strong> by clicking buttons in correct order (or press keys 1–4)</li>
+            <li>You have <strong>30 seconds</strong> each round to submit your answer</li>
+            <li>Start with <strong>2 lives</strong> - lose one for each mistake or timeout</li>
+          </ul>
+          
+          <h4>Power-Ups (if enabled)</h4>
+          <ul>
+            <li><strong>Second Chance</strong> - Replay the sequence once per game after a wrong answer</li>
+            <li><strong>Freeze</strong> - Pause your timer for 3 seconds (use once per round)</li>
+            <li><strong>Pattern Peek</strong> - Reveal the sequence during play phase (use once per game)</li>
+          </ul>
+          
+          <h4>Game End Scenarios</h4>
+          <ul>
+            <li><strong>Normal Victory:</strong> Last player standing or highest score after max rounds</li>
+            <li><strong>DRAW (3+ players):</strong> If all remaining players lose their last life in the SAME round, the game ends in a draw - no winner!</li>
+            <li><strong>1v1 SUDDEN DEATH:</strong> When exactly 2 players both lose their last life in the same round, they enter sudden death instead of a draw</li>
+          </ul>
+          
+          <h4>Sudden Death Rules (1v1 Only)</h4>
+          <ul>
+            <li><strong>When:</strong> Triggers ONLY when exactly 2 players both fail in the same round</li>
+            <li><strong>Revival:</strong> Both players are revived with 1 life for a final showdown</li>
+            <li><strong>Challenge:</strong> Fixed 5-tile sequence - first to get it right wins</li>
+            <li><strong>If both fail:</strong> Sudden death continues with a new round (NOT a draw)</li>
+            <li><strong>Power-ups:</strong> Still work in sudden death (timer pauses during Second Chance)</li>
+          </ul>
+          
+          <h4>Elimination & Spectating</h4>
+          <ul>
+            <li><strong>Eliminated</strong> when you lose your last life</li>
+            <li>Watch the match progress and see the <strong>live scoreboard</strong></li>
+            <li>Eliminated players <strong>cannot rejoin</strong> (except in 1v1 sudden death)</li>
+            <li>See who's still alive and track the current round</li>
+          </ul>
+          
+          <h4>Quick Tips</h4>
+          <ul>
+            <li>Use <strong>keyboard shortcuts</strong> (1-4) for faster input</li>
+            <li>Save your <strong>Second Chance</strong> for difficult rounds</li>
+            <li>Use <strong>Freeze</strong> when you need more time to think</li>
+            <li><strong>3+ players all fail = DRAW</strong> | <strong>2 players both fail = SUDDEN DEATH</strong></li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Players in Lobby Section -->
+      <div class="lobby-section">
+        <div class="section-divider"></div>
+        <div class="lobby-header">
+          <h3>Players in Lobby</h3>
+          <button class="collapse-toggle" id="lobbyToggle" aria-expanded="true">
+            <span class="toggle-icon">▼</span>
+          </button>
+        </div>
+        <div id="lobbyPlayers" class="player-list" role="list" aria-label="Players in lobby"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Join Room Modal -->
+  <div id="joinRoomModal" class="modal" style="display:none;" aria-hidden="true">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content" role="dialog" aria-label="Join Room">
+      <div class="modal-header">
+        <h3>Join Room</h3>
+        <button id="joinModalClose" class="modal-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <label for="roomCodeInput">Enter Room Code:</label>
+        <input id="roomCodeInput" type="text" placeholder="ABC123" maxlength="6" aria-label="Room code" />
+        <div id="joinRoomError" class="error-message" style="display:none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="joinRoomCancel" class="btn-secondary">Cancel</button>
+        <button id="joinRoomConfirm" class="btn-primary">Join Room</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Room Settings Modal -->
+  <div id="createRoomModal" class="modal" style="display:none;" aria-hidden="true">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content" role="dialog" aria-label="Create Room Settings">
+      <div class="modal-header">
+        <h3>Create Room</h3>
+        <button id="createModalClose" class="modal-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="settings-form">
+          <div class="form-group">
+            <label for="maxPlayersSelect">Max Players</label>
+            <select id="maxPlayersSelect" class="form-select">
+              <option value="2">2 Players</option>
+              <option value="3">3 Players</option>
+              <option value="4">4 Players</option>
+              <option value="5">5 Players</option>
+              <option value="6" selected>6 Players</option>
+            </select>
+            <small class="form-help">Maximum number of players allowed in the room</small>
+          </div>
+          
+          <div class="form-group">
+            <label for="maxRoundsSelect">Max Rounds</label>
+            <select id="maxRoundsSelect" class="form-select">
+              <option value="15" selected>15 Rounds</option>
+              <option value="20">20 Rounds</option>
+              <option value="25">25 Rounds</option>
+              <option value="30">30 Rounds</option>
+            </select>
+            <small class="form-help">Number of rounds to play before game ends</small>
+          </div>
+          
+          <div class="form-group">
+            <label class="toggle-label">
+              <span>Power-Ups Enabled</span>
+              <div class="toggle-switch">
+                <input type="checkbox" id="powerUpsToggle" checked />
+                <span class="toggle-slider"></span>
+              </div>
+            </label>
+            <small class="form-help">Enable Second Chance, Freeze, and Pattern Peek power-ups</small>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="createRoomCancel" class="btn-secondary">Cancel</button>
+        <button id="createRoomConfirm" class="btn-primary">Create Room</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Room Lobby Screen -->
+  <div id="roomLobbyScreen" class="room-lobby" style="display:none;" aria-hidden="true">
+    <div class="lobby-background">
+      <div class="lobby-glow-orb lobby-glow-1"></div>
+      <div class="lobby-glow-orb lobby-glow-2"></div>
+    </div>
+    
+    <div class="lobby-container">
+      <!-- Header Section -->
+      <div class="lobby-header">
+        <div class="lobby-title-section">
+          <h1 class="lobby-title">Room Lobby</h1>
+          <div class="room-code-section">
+            <span class="room-code-label">Room Code</span>
+            <div class="room-code-display">
+              <code id="displayRoomCode" class="room-code">------</code>
+              <button id="copyRoomCode" class="copy-btn" title="Copy room code">
+                <span class="copy-icon">📋</span>
+                <span class="copy-text">Copy</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <button id="leaveRoomBtn" class="btn-leave">
+          <span class="btn-text">Leave Room</span>
+        </button>
+      </div>
+      
+      <!-- Players Section -->
+      <div class="lobby-content">
+        <div class="players-section">
+          <div class="players-header">
+            <h2 class="players-title">Players <span id="playerCount" class="player-count">(0/6)</span></h2>
+          </div>
+          <div id="roomPlayersList" class="players-grid" role="list" aria-label="Room players"></div>
+        </div>
+        
+        <!-- Quick Tips Banner -->
+        <div class="tips-banner">
+          <div class="tips-icon">💡</div>
+          <div class="tips-content">
+            <span class="tips-label">Tip:</span>
+            <span id="tipText" class="tips-text">Loading...</span>
+          </div>
+        </div>
+        
+        <!-- Game Controls Section -->
+        <div class="game-controls-section">
+          <!-- Host Controls -->
+          <div id="hostControls" class="host-controls" style="display:none;">
+            <button id="startGameBtn" class="btn-start-game" style="display:none;">
+              <span class="btn-text">Start Game</span>
+            </button>
+            <button id="cancelStartBtn" class="btn-cancel-start" style="display:none;">
+              <span class="btn-text">Cancel Start</span>
+            </button>
+          </div>
+          
+          <!-- Countdown Banner -->
+          <div id="gameCountdownBanner" class="countdown-banner" style="display:none;">
+            <div class="countdown-content">
+              <div class="countdown-icon">⏱️</div>
+              <div class="countdown-text">
+                <span class="countdown-label">Game starting in</span>
+                <span id="countdownTime" class="countdown-timer">30</span>
+                <span class="countdown-unit">seconds</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Non-Host Status -->
+          <div id="waitingForHost" class="waiting-status" style="display:none;">
+            <div class="waiting-text">Waiting for host to start the game...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Kick Player Confirmation Modal -->
+  <div id="kickPlayerModal" class="modal" style="display:none;" aria-hidden="true">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content" role="dialog" aria-label="Kick Player">
+      <div class="modal-header">
+        <h3>Kick Player</h3>
+        <button id="kickModalClose" class="modal-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Are you sure you want to kick <strong id="kickPlayerName">Player</strong>?</p>
+      </div>
+      <div class="modal-footer">
+        <button id="kickPlayerCancel" class="btn-secondary">Cancel</button>
+        <button id="kickPlayerConfirm" class="btn-exit">Confirm Kick</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Kicked Player Modal -->
+  <div id="kickedModal" class="modal" style="display:none;" aria-hidden="true">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content" role="dialog" aria-label="Kicked from Room">
+      <div class="modal-header">
+        <h3>Removed from Room</h3>
+      </div>
+      <div class="modal-body">
+        <p>You were removed from the room by the host.</p>
+        <p>Returning to main menu in <span id="kickedCountdown">3</span> seconds...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <header class="visually-hidden" aria-hidden="true">
+    <h1>ColorRush</h1>
+  </header>
+
+  <div id="gameContainer" role="region" aria-label="ColorRush game" aria-hidden="true">
+    <!-- Game Background -->
+    <div class="game-background">
+      <div class="game-ambient-orb game-orb-1"></div>
+      <div class="game-ambient-orb game-orb-2"></div>
+      <div class="game-ambient-orb game-orb-3"></div>
+      <div class="game-gradient-overlay"></div>
+    </div>
+
+    <!-- Audio Toggle (positioned absolutely) -->
+    <button id="audioToggle" class="audio-btn" aria-pressed="true" title="Toggle audio">🔊</button>
+
+    <!-- Game Layout Container -->
+    <div class="game-layout">
+      <!-- Header Section -->
+      <div class="game-header">
+        <!-- Game Phase Banner -->
+        <div id="gamePhaseBanner" class="game-phase-banner">
+          <div class="phase-icon" id="phaseIcon">🎮</div>
+          <div class="phase-text" id="phaseText">Connecting to server...</div>
+        </div>
+
+        <!-- Tie-breaker banner (hidden by default) -->
+        <div id="tieBreakerBanner" class="tie-breaker-banner" style="display:none;" aria-live="assertive"></div>
+
+        <!-- Timer Display -->
+        <div id="inputTimer" class="input-timer" aria-live="polite"></div>
+        <div id="countdown" class="countdown-display" aria-live="polite"></div>
+      </div>
+
+      <!-- Main Game Area -->
+      <div class="game-main">
+        <!-- Players List (for multiplayer) -->
+        <ul id="players" class="players-sidebar"></ul>
+
+        <!-- Game Grid Container -->
+        <div class="game-grid-container">
+          <!-- Power-ups Panel -->
+          <div class="power-ups-panel" id="powerUpsPanel">
+            <div class="power-ups-title">Power-ups</div>
+            <div class="power-ups-grid">
+              <button id="shieldBtn" class="power-up-btn second-chance-btn" title="Second Chance - Get one automatic retry if you fail a round">
+                <div class="power-up-icon">🔁</div>
+                <div class="power-up-name">Second Chance</div>
+              </button>
+              <button id="timeFreezeBtn" class="power-up-btn freeze-btn" title="Time Freeze - Pauses input timer for 3 seconds">
+                <div class="power-up-icon">❄️</div>
+                <div class="power-up-name">Freeze</div>
+              </button>
+              <button id="patternPeekBtn" class="power-up-btn peek-btn" title="Pattern Peek - Reveals next correct tile">
+                <div class="power-up-icon">🧠</div>
+                <div class="power-up-name">Peek</div>
+              </button>
+            </div>
+          </div>
+          
+          <div id="buttons" class="game-grid" aria-hidden="false">
+            <button class="tile-btn" id="red" data-color="red" aria-label="Red tile" tabindex="0">
+              <span class="tile-number">1</span>
+              <div class="tile-glow"></div>
+            </button>
+            <button class="tile-btn" id="green" data-color="green" aria-label="Green tile" tabindex="0">
+              <span class="tile-number">2</span>
+              <div class="tile-glow"></div>
+            </button>
+            <button class="tile-btn" id="blue" data-color="blue" aria-label="Blue tile" tabindex="0">
+              <span class="tile-number">3</span>
+              <div class="tile-glow"></div>
+            </button>
+            <button class="tile-btn" id="yellow" data-color="yellow" aria-label="Yellow tile" tabindex="0">
+              <span class="tile-number">4</span>
+              <div class="tile-glow"></div>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Section -->
+      <div class="game-footer">
+        <!-- Ready Area -->
+        <div id="readyArea" class="ready-section" style="display:none;">
+          <div class="ready-container">
+            <button id="readyBtn" class="ready-button">
+              <span class="ready-icon">⚡</span>
+              <span class="ready-text">Ready</span>
+              <div class="ready-glow"></div>
+              <div class="ready-countdown-ring" id="readyCountdownRing"></div>
+            </button>
+            <div class="ready-status">
+              <span>Waiting for other players...</span>
+              <div class="auto-ready-timer">
+                Auto-ready in <span id="autoReadyTimer">8</span>s
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Start Button -->
+        <button id="startBtn" class="start-game-button" style="display:none;">
+          <span class="start-icon">🚀</span>
+          <span class="start-text">Start Game</span>
+          <div class="start-glow"></div>
+        </button>
+
+        <!-- Game Messages -->
+        <div class="game-messages-container">
+          <div id="gameMessages" class="game-message"></div>
+          <div id="lifeMessages" class="life-message" aria-live="polite"></div>
+          <div id="streakMessages" class="streak-message" aria-live="polite"></div>
+          <div id="pointsMessages" class="points-message" aria-live="polite"></div>
+          <div id="gameOverMessages" class="game-over-message" aria-live="polite"></div>
+        </div>
+
+        <!-- Controls -->
+        <div class="game-controls">
+          <button id="exitButton" class="btn-exit" style="display:none;">
+            <span>⟲ Exit to Menu</span>
+          </button>
+          <button id="practiceRetryBtn" class="btn-primary" style="display:none;">
+            <span>🔄 Try Again</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Victory Screen -->
+  <div id="victoryScreen" class="victory-screen" style="display:none;" aria-hidden="true">
+    <div class="victory-background">
+      <div class="victory-overlay"></div>
+      <div class="victory-spotlight"></div>
+      <div class="victory-particles"></div>
+    </div>
+    
+    <div class="victory-container">
+      <!-- Winner Showcase -->
+      <div class="winner-showcase">
+        <div class="winner-crown">👑</div>
+        <div class="winner-title" id="victoryTitle">VICTORY!</div>
+        <div class="winner-name" id="victoryWinnerName">Champion</div>
+        <div class="winner-subtitle" id="victorySubtitle">Congratulations!</div>
+        <div class="winner-glow"></div>
+      </div>
+      
+      <!-- Match Statistics -->
+      <div class="match-stats-panel">
+        <h3 class="stats-title">Match Statistics</h3>
+        <div class="stats-grid" id="matchStatsGrid">
+          <div class="stat-item">
+            <div class="stat-label">Total Rounds</div>
+            <div class="stat-value" id="statTotalRounds">0</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Fastest Time</div>
+            <div class="stat-value" id="statFastestTime">0ms</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Total Players</div>
+            <div class="stat-value" id="statTotalPlayers">0</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Eliminations</div>
+            <div class="stat-value" id="statEliminations">0</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Player Comparison -->
+      <div class="player-comparison-panel">
+        <h3 class="comparison-title">Final Rankings</h3>
+        <div class="player-rankings" id="playerRankings">
+          <!-- Rankings will be populated dynamically -->
+        </div>
+      </div>
+      
+      <!-- Return Controls -->
+      <div class="victory-controls">
+        <div class="return-timer">
+          <div class="timer-text">Returning to lobby in</div>
+          <div class="timer-countdown" id="victoryCountdown">10</div>
+          <div class="timer-unit">seconds</div>
+          <div class="timer-progress">
+            <div class="timer-progress-bar" id="victoryProgressBar"></div>
+          </div>
+        </div>
+        <button id="returnNowBtn" class="return-now-btn">
+          <span class="btn-icon">🏠</span>
+          <span class="btn-text">Return Now</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tutorial Container -->
+  <div id="tutorialContainer" class="tutorial-container" style="display:none;" aria-hidden="true">
+    <div class="tutorial-background">
+      <div class="tutorial-glow-orb tutorial-glow-1"></div>
+      <div class="tutorial-glow-orb tutorial-glow-2"></div>
+    </div>
+    
+    <div class="tutorial-content">
+      <!-- Tutorial Header -->
+      <div class="tutorial-header">
+        <div class="tutorial-progress">
+          <span id="tutorialStepIndicator">Step 1/6</span>
+        </div>
+        <button id="tutorialSkipBtn" class="tutorial-skip-btn" title="Skip Tutorial">✕</button>
+      </div>
+      
+      <!-- Tutorial Body -->
+      <div class="tutorial-body">
+        <div id="tutorialTitle" class="tutorial-title">Welcome to ColorRush</div>
+        <div id="tutorialMessage" class="tutorial-message">Watch the tiles carefully. Repeat them in order to survive.</div>
+        
+        <!-- Tutorial Game Area -->
+        <div id="tutorialGameArea" class="tutorial-game-area" style="display:none;">
+          <div id="tutorialTimer" class="tutorial-timer"></div>
+          <div class="tutorial-grid">
+            <button class="tutorial-tile" id="tutorialRed" data-color="red">
+              <span class="tile-number">1</span>
+            </button>
+            <button class="tutorial-tile" id="tutorialGreen" data-color="green">
+              <span class="tile-number">2</span>
+            </button>
+            <button class="tutorial-tile" id="tutorialBlue" data-color="blue">
+              <span class="tile-number">3</span>
+            </button>
+            <button class="tutorial-tile" id="tutorialYellow" data-color="yellow">
+              <span class="tile-number">4</span>
+            </button>
+          </div>
+        </div>
+        
+        <!-- Tutorial Powerups Demo -->
+        <div id="tutorialPowerupsArea" class="tutorial-powerups-area" style="display:none;">
+          <div class="tutorial-powerups-grid">
+            <div class="tutorial-powerup-card">
+              <div class="tutorial-powerup-icon">🔁</div>
+              <div class="tutorial-powerup-name">Second Chance</div>
+              <div class="tutorial-powerup-desc">Get one automatic retry if you fail a round. Use once per match.</div>
+            </div>
+            <div class="tutorial-powerup-card">
+              <div class="tutorial-powerup-icon">❄️</div>
+              <div class="tutorial-powerup-name">Freeze</div>
+              <div class="tutorial-powerup-desc">Pause the timer for 3 seconds. Use during play phase.</div>
+            </div>
+            <div class="tutorial-powerup-card">
+              <div class="tutorial-powerup-icon">🧠</div>
+              <div class="tutorial-powerup-name">Pattern Peek</div>
+              <div class="tutorial-powerup-desc">Reveals the next correct tile you need to click. Use once per match.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Tutorial Footer -->
+      <div class="tutorial-footer">
+        <button id="tutorialActionBtn" class="tutorial-action-btn">Start Tutorial</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Global Reusable Modal -->
+  <div id="globalModal" class="modal global-modal" style="display:none;" aria-hidden="true">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content" role="dialog" aria-labelledby="globalModalTitle">
+      <div class="modal-header">
+        <h3 id="globalModalTitle">Modal Title</h3>
+        <button id="globalModalClose" class="modal-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="globalModalIcon" class="modal-icon"></div>
+        <p id="globalModalMessage">Modal message goes here.</p>
+        <input id="globalModalInput" type="text" style="display:none;" />
+      </div>
+      <div class="modal-footer">
+        <button id="globalModalSecondary" class="btn-secondary" style="display:none;">Cancel</button>
+        <button id="globalModalPrimary" class="btn-primary">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+  <script src="/games/colorrush/modal.js"></script>
+  <script src="/games/colorrush/js/01-state.js"></script>
+  <script src="/games/colorrush/js/02-elements.js"></script>
+  <script src="/games/colorrush/js/03-tiles-input.js"></script>
+  <script src="/games/colorrush/js/04-lobby.js"></script>
+  <script src="/games/colorrush/js/05-match-ui.js"></script>
+  <script src="/games/colorrush/js/06-game-engine.js"></script>
+  <script src="/games/colorrush/js/07-tutorial.js"></script>
+  <script src="/games/colorrush/js/08-socket-lobby-powerups.js"></script>
+  <script src="/games/colorrush/js/09-socket-room-state.js"></script>
+  <script src="/games/colorrush/js/10-socket-rounds.js"></script>
+  <script src="/games/colorrush/js/11-offline-and-eliminated.js"></script>
+
+  <!-- =============================== -->
+  <!-- Eliminated Player Overlay -->
+  <!-- =============================== -->
+  <div id="eliminatedOverlay" class="eliminated-overlay" style="display:none;" aria-hidden="true">
+    <div class="eliminated-content">
+      <div class="eliminated-icon">💀</div>
+      <h2 class="eliminated-title">You're Out!</h2>
+      <p id="eliminatedMessage" class="eliminated-message">You were eliminated in Round <span id="eliminatedRound">0</span></p>
+      
+      <!-- Live Progress Panel -->
+      <div class="eliminated-progress-panel">
+        <h3 class="progress-title">Match Progress</h3>
+        <div class="progress-stats">
+          <div class="progress-stat">
+            <span class="progress-label">Current Round</span>
+            <span id="progressRound" class="progress-value">-</span>
+          </div>
+          <div class="progress-stat">
+            <span class="progress-label">Players Remaining</span>
+            <span id="progressPlayers" class="progress-value">-</span>
+          </div>
+        </div>
+        <p id="progressStatus" class="progress-status">Game in progress...</p>
+      </div>
+      
+      <!-- Mini Scoreboard -->
+      <div class="eliminated-scoreboard-panel">
+        <h3 class="scoreboard-title">Current Standings</h3>
+        <div id="eliminatedScoreboard" class="eliminated-scoreboard"></div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
+
+
+
+
+
+
+
+
+

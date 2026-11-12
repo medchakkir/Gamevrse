@@ -1,36 +1,12 @@
 services:
-  # Main homepage and ColorRush game
   - type: web
-    name: gamevrse-colorrush
+    name: gamevrse
     env: node
     buildCommand: npm install
-    startCommand: node server.js
+    startCommand: npm start
+    healthCheckPath: /healthz
     envVars:
-      - key: PORT
-        value: 10000
       - key: NODE_ENV
         value: production
-
-  # Rankly game
-  - type: web
-    name: gamevrse-rankly
-    env: node
-    buildCommand: cd family-feud-game && npm install
-    startCommand: cd family-feud-game && node server.js
-    envVars:
-      - key: PORT
-        value: 10001
-      - key: NODE_ENV
-        value: production
-
-  # Blackjack game
-  - type: web
-    name: gamevrse-blackjack
-    env: node
-    buildCommand: npm install
-    startCommand: node start-blackjack.js
-    envVars:
-      - key: PORT
-        value: 10002
-      - key: NODE_ENV
-        value: production
+      - key: ADMIN_TOKEN
+        generateValue: true
