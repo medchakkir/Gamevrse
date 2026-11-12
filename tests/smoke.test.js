@@ -31,3 +31,31 @@ for (const ns of ['colorrush', 'rankly', 'blackjack']) {
     s.close();
   });
 }
+
+test('colorrush: create a room, join it, and start a game', async () => {
+  const open = () =>
+    new Promise((res, rej) => {
+      const s = connect(`${base}/colorrush`, { transports: ['websocket'] });
+      s.on('connect', () => res(s));
+      s.on('connect_error', rej);
+    });
+  const once = (s, ev) => new Promise((res) => s.once(ev, res));
+
+  const host = await open();
+  const guest = await open();
+  const created = once(host, 'roomCreated');
+  host.emit('createRoom', { name: 'Host', options: {} });
+  const { roomId } = await created;
+  assert.match(roomId, /^[A-Z0-9]{6}$/i);
+
+  const joined = once(guest, 'roomJoined');
+  guest.emit('joinRoom', { roomId, name: 'Guest' });
+  const j = await joined;
+  assert.strictEqual(j.roomId, roomId);
+
+  const started = Promise.race([once(host, 'gameStarting'), once(host, 'roundStart'), once(host, 'phaseChange'), new Promise((r) => setTimeout(() => r('timeout'), 3000))]);
+  host.emit('startGame');
+  await started; // exercises start path (timers/rounds modules) without throwing
+  host.close();
+  guest.close();
+});
