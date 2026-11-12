@@ -10,9 +10,15 @@
     "lint": "eslint .",
     "format": "prettier --write ."
   },
-  "keywords": ["games", "multiplayer", "socket.io"],
+  "keywords": [
+    "games",
+    "multiplayer",
+    "socket.io"
+  ],
   "license": "ISC",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "compression": "^1.8.0",
     "express": "^5.1.0",
@@ -21,6 +27,7 @@
   },
   "devDependencies": {
     "eslint": "^9.0.0",
+    "espree": "^10.0.0",
     "globals": "^15.0.0",
     "prettier": "^3.3.0",
     "socket.io-client": "^4.8.1"

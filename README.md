@@ -24,7 +24,7 @@ src/server.js          Express + Socket.IO bootstrap; mounts every game
 src/config.js          Environment configuration
 src/games/<game>/      Server logic; exports attach(namespace)
 public/index.html      Homepage
-public/games/<game>/   Client HTML, JS, CSS and assets for each game
+public/games/<game>/   Client HTML, JS, CSS and assets (ColorRush client is split into ordered scripts in js/)
 tests/                 Node test runner tests
 docs/DEPLOYMENT.md     Deployment guide
 ```
