@@ -139,3 +139,77 @@ test('colorrush: over-long chat message is truncated to 200 characters', async (
   assert.strictEqual(msg.text.length, 200);
   host.close();
 });
+
+// ---- Hardening: malformed payloads must never take the server down ----
+const MAIN_EVENTS = {
+  colorrush: ['createRoom', 'joinRoom', 'registerName', 'updateGameSettings', 'kickPlayer', 'submitSequence', 'activatePatternPeek', 'chatMessage'],
+  rankly: ['create_room', 'join_room', 'leave_room', 'close_room', 'kick_player', 'toggle_ready', 'update_avatar', 'submit_answer', 'start_game', 'submit_rank', 'chat_message', 'attempt_reconnect'],
+  blackjack: ['createRoom', 'joinRoom', 'identify', 'setName', 'createPracticeRoom', 'setEliminationMode', 'submitRouletteChoice', 'spectatorReaction', 'kickPlayer', 'unbanPlayer'],
+};
+
+for (const [ns, events] of Object.entries(MAIN_EVENTS)) {
+  test(`${ns}: malformed payloads (none, null, string) do not crash the server`, async () => {
+    const uncaught = [];
+    const onUncaught = (err) => uncaught.push(err);
+    process.on('uncaughtException', onUncaught);
+    process.on('unhandledRejection', onUncaught);
+    const s = await openSocket(ns);
+    for (const ev of events) {
+      s.emit(ev);
+      s.emit(ev, null);
+      s.emit(ev, 'garbage');
+      s.emit(ev, null, null); // callback slot not a function
+      s.emit(ev, 'garbage', 'not-a-function');
+    }
+    await new Promise((r) => setTimeout(r, 300));
+    process.off('uncaughtException', onUncaught);
+    process.off('unhandledRejection', onUncaught);
+    assert.deepStrictEqual(
+      uncaught.map((e) => e?.message),
+      [],
+      'handlers must not throw'
+    );
+    const fresh = await openSocket(ns); // server still accepts connections
+    fresh.close();
+    s.close();
+    const res = await fetch(`${base}/healthz`);
+    assert.deepStrictEqual(await res.json(), { ok: true });
+  });
+}
+
+test('colorrush: 500-character name is capped at 20', async () => {
+  const s = await openSocket('colorrush');
+  const created = new Promise((r) => s.once('roomCreated', r));
+  s.emit('createRoom', { name: 'n'.repeat(500), options: {} });
+  const msg = await created;
+  const state = JSON.stringify(msg);
+  assert.ok(!state.includes('n'.repeat(21)), 'name must be capped');
+  assert.ok(state.includes('n'.repeat(20)));
+  s.close();
+});
+
+test('rankly: 500-character name is capped and bad avatar colors are replaced', async () => {
+  const s = await openSocket('rankly');
+  const res = await new Promise((r) =>
+    s.emit('create_room', { name: 'n'.repeat(500), avatarColor: 'url(javascript:alert(1))', avatarTextColor: '#12' }, r)
+  );
+  assert.strictEqual(res.ok, true);
+  const me = res.players[0];
+  assert.strictEqual(me.name.length, 20);
+  assert.strictEqual(me.avatarColor, '#4d73ff');
+  assert.strictEqual(me.avatarTextColor, '#ffffff');
+
+  const good = await new Promise((r) => {
+    const j = openSocket('rankly').then((g) => {
+      g.emit('join_room', { roomId: res.roomId, name: 'G', avatarColor: '#abc', avatarTextColor: '#A1B2C3' }, (x) => {
+        g.close();
+        r(x);
+      });
+    });
+    return j;
+  });
+  const guest = good.players.find((p) => p.name === 'G');
+  assert.strictEqual(guest.avatarColor, '#abc');
+  assert.strictEqual(guest.avatarTextColor, '#A1B2C3');
+  s.close();
+});

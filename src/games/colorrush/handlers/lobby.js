@@ -1,4 +1,5 @@
 const { ctx } = require('../state');
+const { cleanName } = require('../../../shared/validate');
 const { broadcastRoomState, cancelGameCountdown, createNewPlayer, resetPlayersState, resetRoundState, tryStartGame, updatePlayerList } = require('../lobby');
 const { startNextRound, waitForReadies } = require('../rounds');
 const { log, playerRoom } = require('../state');
@@ -10,7 +11,9 @@ function register(socket) {
   // --------------------
   // CREATE ROOM
   // --------------------
-  socket.on("createRoom", ({ name, options } = {}) => {
+  socket.on("createRoom", (payload) => {
+    const { options } = payload ?? {};
+    const name = cleanName(payload?.name);
     const room = createRoom(socket.id, options || {});
 
     log(`[createRoom] Player ${socket.id} (${name}) creating room ${room.id}`);
@@ -47,7 +50,9 @@ function register(socket) {
   // --------------------
   // JOIN ROOM
   // --------------------
-  socket.on("joinRoom", ({ roomId, name }) => {
+  socket.on("joinRoom", (payload) => {
+    const { roomId } = payload ?? {};
+    const name = cleanName(payload?.name);
     // STEP 1: NORMALIZE ROOM CODE INPUT
     // Validate and normalize room code before processing
     if (!roomId || typeof roomId !== 'string') {
@@ -200,10 +205,11 @@ function register(socket) {
     const room = getRoom(roomId);
     if (!room) return;
 
-    if (typeof name === "string" && name.trim().length > 0 && room.players[socket.id]) {
-      room.players[socket.id].name = name.trim();
+    const clean = cleanName(name);
+    if (clean && room.players[socket.id]) {
+      room.players[socket.id].name = clean;
       updatePlayerList(room);
-      log(`Player ${socket.id} registered as ${name}`);
+      log(`Player ${socket.id} registered as ${clean}`);
     }
   });
 
@@ -233,7 +239,8 @@ function register(socket) {
   // --------------------
   // UPDATE GAME SETTINGS (HOST ONLY)
   // --------------------
-  socket.on("updateGameSettings", (settings) => {
+  socket.on("updateGameSettings", (rawSettings) => {
+    const settings = rawSettings && typeof rawSettings === "object" ? rawSettings : {};
     const roomId = playerRoom[socket.id];
     const room = getRoom(roomId);
     
@@ -341,7 +348,8 @@ function register(socket) {
   });
 
   // host kicks player
-  socket.on("kickPlayer", ({ playerId }) => {
+  socket.on("kickPlayer", (payload) => {
+    const { playerId } = payload ?? {};
     const roomId = playerRoom[socket.id];
     const room = getRoom(roomId);
     if (!room || room.phase !== 'lobby') return;
