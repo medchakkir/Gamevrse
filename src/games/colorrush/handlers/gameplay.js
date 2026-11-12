@@ -8,6 +8,8 @@ const { clearRoundTimer } = require('../timers');
 const { getRoom } = require('../rooms');
 
 function register(socket) {
+  // Per-socket chat throttle (lives in this closure, so it is released on disconnect)
+  let lastChatAt = 0;
 
   // DEPRECATED: Old ready signal from client (replaced by playerReadyForSequence in 4-phase system)
   // This handler is disabled to prevent double startNextRound calls
@@ -402,7 +404,14 @@ function register(socket) {
 
     const p = room.players[socket.id];
     if (p && typeof msg === "string") {
-      ctx.io.to(room.id).emit("chatMessage", { name: p.name, colorIndex: p.colorIndex, text: msg });
+      const text = msg.trim().slice(0, 200);
+      if (!text) return;
+
+      const now = Date.now();
+      if (now - lastChatAt < 500) return;
+      lastChatAt = now;
+
+      ctx.io.to(room.id).emit("chatMessage", { name: p.name, colorIndex: p.colorIndex, text });
     }
   });
 }
