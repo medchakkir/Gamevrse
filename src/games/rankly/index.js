@@ -688,13 +688,21 @@ const onConnection = socket => {
   // -----------------------------------------------------------
   // CHAT (simple anti-spam included)
   // -----------------------------------------------------------
-  socket.on("chat_message", ({ roomId, name, text }) => {
+  socket.on("chat_message", ({ roomId, text } = {}) => {
     const now = Date.now();
     if (now - (chatTimestamps[socket.id] || 0) < 500) return;
     chatTimestamps[socket.id] = now;
     
     const room = rooms[roomId];
     if (!room) return;
+
+    // Sender must be a member of the room; name comes from the server, not the client
+    const player = room.players[socket.id];
+    if (!player) return;
+
+    if (typeof text !== "string") return;
+    const clean = text.trim().slice(0, 200);
+    if (!clean) return;
     
     // SERVER-AUTHORITATIVE: Block chat during "starting" and "in_round" states
     if (room.state === "starting" || room.state === "in_round") {
@@ -702,7 +710,7 @@ const onConnection = socket => {
     }
     
     // Allow chat in "lobby" and "between_rounds"
-    io.to(roomId).emit("chat_message_broadcast", { name, text });
+    io.to(roomId).emit("chat_message_broadcast", { name: player.name, text: clean });
   });
 
   // -----------------------------------------------------------

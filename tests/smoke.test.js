@@ -87,3 +87,55 @@ test('blackjack: create a room, join it, and set a name', async () => {
   host.close();
   guest.close();
 });
+
+const openSocket = (ns) =>
+  new Promise((res, rej) => {
+    const s = connect(`${base}/${ns}`, { transports: ['websocket'] });
+    s.on('connect', () => res(s));
+    s.on('connect_error', rej);
+  });
+const nextEvent = (s, ev, ms = 400) =>
+  new Promise((res) => {
+    const t = setTimeout(() => res(null), ms);
+    s.once(ev, (data) => {
+      clearTimeout(t);
+      res(data);
+    });
+  });
+
+test('rankly: chat from a socket outside the room is not broadcast', async () => {
+  const host = await openSocket('rankly');
+  const outsider = await openSocket('rankly');
+  const { roomId } = await new Promise((r) => host.emit('create_room', { name: 'Host' }, r));
+
+  const received = nextEvent(host, 'chat_message_broadcast');
+  outsider.emit('chat_message', { roomId, name: 'Intruder', text: 'hello' });
+  assert.strictEqual(await received, null);
+  host.close();
+  outsider.close();
+});
+
+test('rankly: spoofed chat name is replaced with the real player name', async () => {
+  const host = await openSocket('rankly');
+  const { roomId } = await new Promise((r) => host.emit('create_room', { name: 'RealHost' }, r));
+
+  const received = nextEvent(host, 'chat_message_broadcast', 2000);
+  host.emit('chat_message', { roomId, name: 'Admin', text: '  hi  ' });
+  const msg = await received;
+  assert.strictEqual(msg.name, 'RealHost');
+  assert.strictEqual(msg.text, 'hi');
+  host.close();
+});
+
+test('colorrush: over-long chat message is truncated to 200 characters', async () => {
+  const host = await openSocket('colorrush');
+  const created = new Promise((r) => host.once('roomCreated', r));
+  host.emit('createRoom', { name: 'Host', options: {} });
+  await created;
+
+  const received = nextEvent(host, 'chatMessage', 2000);
+  host.emit('chatMessage', 'x'.repeat(500));
+  const msg = await received;
+  assert.strictEqual(msg.text.length, 200);
+  host.close();
+});
