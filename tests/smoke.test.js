@@ -59,3 +59,31 @@ test('colorrush: create a room, join it, and start a game', async () => {
   host.close();
   guest.close();
 });
+
+test('blackjack: create a room, join it, and set a name', async () => {
+  const open = () =>
+    new Promise((res, rej) => {
+      const s = connect(`${base}/blackjack`, { transports: ['websocket'] });
+      s.on('connect', () => res(s));
+      s.on('connect_error', rej);
+    });
+  const once = (s, ev) => new Promise((res) => s.once(ev, res));
+
+  const host = await open();
+  const guest = await open();
+  const created = once(host, 'roomJoined');
+  host.emit('createRoom');
+  const { roomCode } = await created;
+  assert.strictEqual(roomCode.length, 6);
+
+  const joined = once(guest, 'roomJoined');
+  guest.emit('joinRoom', roomCode);
+  assert.strictEqual((await joined).roomCode, roomCode);
+
+  const state = once(host, 'state');
+  guest.emit('setName', 'Guest');
+  const s = await state;
+  assert.strictEqual(s.players.length, 2);
+  host.close();
+  guest.close();
+});
