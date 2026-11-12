@@ -808,11 +808,6 @@ function fullReset(room) {
   updatePlayerList(room);
 }
 
-function broadcastRound() {
-  io.emit("roundStart", { sequence, round });
-  log(`Broadcasted round ${round} (len=${sequence.length})`);
-}
-
 // End game and broadcast scoreboard/winner with enhanced statistics
 function endGame(room, winnerId) {
   log(`[endGame] FINAL CALLED - winner=${winnerId}, room=${room.id}`);

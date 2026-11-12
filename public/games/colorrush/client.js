@@ -4428,7 +4428,7 @@ window.startColorRush = function(options) {
   if (!isLocal) {
     if (options.name && typeof options.name === 'string') {
       nameInput.value = options.name;
-      setTimeout(() => { try { enterBtn.click(); } catch(e) { /* fallback */ } }, 150);
+      setTimeout(() => { try { document.getElementById("enterBtn")?.click(); } catch(e) { /* fallback */ } }, 150);
     }
     setTimeout(()=> {
       emitSafe('requestSync');

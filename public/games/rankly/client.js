@@ -513,6 +513,8 @@ function setLobbyMode() {
   }
 
   // Show appropriate button based on host status
+  const startGameBtn = document.getElementById("startGameBtn");
+  const readyBtn = document.getElementById("readyBtn");
   if (amHost) {
     show(startGameBtn);
     hide(readyBtn);
@@ -719,8 +721,8 @@ function setGameMode() {
   }
 
   // Hide Start Game and Ready buttons during game
-  hide(startGameBtn);
-  hide(readyBtn);
+  hide(document.getElementById("startGameBtn"));
+  hide(document.getElementById("readyBtn"));
 }
 
 
@@ -750,6 +752,7 @@ function launchConfetti(container) {
 }
 
 function revealResultsSequentially(results) {
+  const resultsList = document.getElementById("resultsList");
   resultsList.innerHTML = "";
 
   results.forEach((r, index) => {
@@ -1067,7 +1070,7 @@ function resetToLobbyUI() {
     }
 
     myName = nameValue;
-    const selectedMode = modeCustom.checked ? "custom" : "normal";
+    const selectedMode = document.getElementById("modeCustom").checked ? "custom" : "normal";
     currentRoomMode = selectedMode;
 
     socket.emit("create_room", { 

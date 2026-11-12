@@ -59,7 +59,7 @@ export function submitRank(roomId, roundId, ranks, rooms, io, startRoundNow, aut
   // EDGE CASE: All players timed out - no ranking needed
   if (validAnswers.length === 0) {
     console.log(`[submitRank] All players timed out - skipping ranking`);
-    processAllTimedOut(room, roomId, timedOutAnswers, io, startRoundNow);
+    processAllTimedOut(room, roomId, timedOutAnswers, rooms, io, startRoundNow);
     return;
   }
 
@@ -253,7 +253,7 @@ export function submitRank(roomId, roundId, ranks, rooms, io, startRoundNow, aut
 }
 
 // Helper: Process all timed-out scenario
-function processAllTimedOut(room, roomId, timedOutAnswers, io, startRoundNow) {
+function processAllTimedOut(room, roomId, timedOutAnswers, rooms, io, startRoundNow) {
   // Still award judge bonus
   if (room.judgeSocketId && room.players[room.judgeSocketId]) {
     room.players[room.judgeSocketId].score += JUDGE_BONUS_POINTS;
