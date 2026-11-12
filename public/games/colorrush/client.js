@@ -577,7 +577,7 @@ function setAudioEnabled(flag, persist = true) {
   }
 }
 
-function unlockAudio('/colorrush') {
+function unlockAudio() {
   if (audioUnlocked) return;
   audioUnlocked = true;
   const probe = allAudio[0];
@@ -991,7 +991,7 @@ function activateTile(color) {
   
   console.log(`✅ Tile click ACCEPTED - processing ${color}`);
   
-  unlockAudio('/colorrush');
+  unlockAudio();
   
   playerSequence.push(color);
   lightUp(color);
@@ -1152,7 +1152,7 @@ createRoomBtn.addEventListener("click", () => {
     return; 
   }
   myName = name;
-  unlockAudio('/colorrush');
+  unlockAudio();
   try { if (audioEnabled) fx.enter.play(); } catch(e){}
   
   // Show create room settings modal instead of creating immediately
@@ -1277,7 +1277,7 @@ joinRoomConfirm.addEventListener("click", () => {
   joinRoomConfirm.disabled = true;
   joinRoomConfirm.textContent = "Joining...";
   
-  unlockAudio('/colorrush');
+  unlockAudio();
   try { if (audioEnabled) fx.enter.play(); } catch(e){}
   
   emitSafe("joinRoom", { roomId: roomCode, name: myName });
@@ -1433,7 +1433,7 @@ if (practiceBtn) {
     isLocal = true;
     myName = name;
     // unlock audio on first interaction
-    unlockAudio('/colorrush');
+    unlockAudio();
     try { if (audioEnabled) fx.enter.play(); } catch(e){}
 
     // Hide intro and show game UI
