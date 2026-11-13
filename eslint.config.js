@@ -20,7 +20,7 @@ function scriptGlobals(dir) {
 module.exports = [
   { ignores: ['node_modules/**'] },
   {
-    files: ['src/**/*.js', 'tests/**/*.js', 'eslint.config.js'],
+    files: ['src/**/*.js', 'tests/**/*.js', 'scripts/**/*.js', 'eslint.config.js'],
     languageOptions: { sourceType: 'commonjs', ecmaVersion: 2023, globals: globals.node },
     rules: { 'no-undef': 'error' },
   },

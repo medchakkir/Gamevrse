@@ -8,6 +8,7 @@
     "dev": "node --watch src/server.js",
     "test": "node --test --test-force-exit tests/*.test.js",
     "lint": "eslint .",
+    "docs:events": "node scripts/generate-realtime-events.js",
     "format": "prettier --write ."
   },
   "keywords": [

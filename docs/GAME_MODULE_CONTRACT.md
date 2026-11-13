@@ -61,3 +61,17 @@ Not done: active rooms are still lost on shutdown (no persistence), and clients 
 - `kick_player` keeps no ban list: a kicked player can rejoin.
 - No player cap is enforced.
 - Rankly keeps its `rooms` map private to the module; tests are wire-level only.
+
+## Event inventory
+
+`docs/REALTIME_EVENTS.md` is generated from the code (`npm run docs:events`) and guarded by
+`tests/realtime-events.test.js`. Its cross-check against the browser clients found, and this
+file records, the following (none changed):
+
+- **ColorRush:** the client listens for `tieBreakerStart`, which the server never emits (the server
+  emits `tieBreakerRoundStart`, which the client also handles). The server emits
+  `settingsUpdateError` and nothing in the client listens for it.
+- **ColorRush:** no client emit was found for `updateGameSettings` (settings are chosen in the
+  create-room modal and sent as `createRoom` options), `chatMessage`, `registerName` or `restartGame`.
+- **Blackjack:** no client UI emits `unbanPlayer`, and nothing listens for `unbanSuccess` / `unbanError`.
+- **Rankly:** no client emit was found for `host_end_game`.
