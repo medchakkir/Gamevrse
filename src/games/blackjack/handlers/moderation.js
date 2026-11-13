@@ -29,6 +29,11 @@ function register(socket) {
     
     // Remove from banned list
     room.bannedPlayers.delete(targetPlayerId);
+    // Also lift the name+IP identity ban created by the same kick, otherwise the
+    // unbanned player would be kicked again as soon as they set their name.
+    for (const [key, ban] of room.bannedIdentities) {
+      if (ban.socketId === targetPlayerId) room.bannedIdentities.delete(key);
+    }
     logger.debug(`[UNBAN] Removed ${targetPlayerId} from banned list for room ${roomCode}`);
     
     // Log the unban action
@@ -94,6 +99,7 @@ function register(socket) {
     room.bannedIdentities.set(banKey, {
       name: targetPlayer.name,
       ip: playerIP,
+      socketId: targetPlayerId, // lets unbanPlayer find this identity ban
       kickedAt: Date.now(),
       reason: 'kicked_by_host'
     });

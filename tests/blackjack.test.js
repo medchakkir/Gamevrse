@@ -427,3 +427,60 @@ test('kick: the kicked socket itself cannot rejoin the room', async () => {
   g.emit('joinRoom', roomCode);
   assert.match(await err, /previously removed by the host/);
 });
+
+// ---- Unban (fix: unban cleared only the socket-id ban, so the same name was kicked again) ----
+test('unban: an unbanned player can rejoin and keep the same name', async () => {
+  const { host, roomCode } = await makeRoom();
+  const { g } = await addGuest(roomCode, 'Troll');
+  await kickGuest(host, g, roomCode);
+
+  const ok = once(host, 'unbanSuccess');
+  host.emit('unbanPlayer', g.id);
+  assert.deepStrictEqual(await ok, { playerId: g.id });
+  assert.strictEqual(bjState.rooms[roomCode].bannedIdentities.size, 0, 'identity ban removed too');
+
+  const joined = once(g, 'roomJoined');
+  g.emit('joinRoom', roomCode);
+  await joined;
+  const wasKicked = quiet(g, 'kicked', 400);
+  g.emit('setName', 'Troll');
+  assert.strictEqual(await wasKicked, true, 'must not be kicked again');
+  const st = await stateWhere(host, (s) => s.players.some((p) => p.name === 'Troll'));
+  assert.strictEqual(st.players.length, 2);
+});
+
+test('unban: only the targeted player\'s identity ban is removed', async () => {
+  const { host, roomCode } = await makeRoom();
+  const { g: a } = await addGuest(roomCode, 'Alpha');
+  const { g: b } = await addGuest(roomCode, 'Bravo');
+  await kickGuest(host, a, roomCode);
+  await kickGuest(host, b, roomCode);
+  assert.strictEqual(bjState.rooms[roomCode].bannedIdentities.size, 2);
+
+  const ok = once(host, 'unbanSuccess');
+  host.emit('unbanPlayer', a.id);
+  await ok;
+  const ids = [...bjState.rooms[roomCode].bannedIdentities.keys()];
+  assert.deepStrictEqual(ids.length, 1);
+  assert.match(ids[0], /^bravo\|/);
+
+  // Bravo is still blocked by name.
+  const again = await client();
+  const joined = once(again, 'roomJoined');
+  again.emit('joinRoom', roomCode);
+  await joined;
+  const kicked = once(again, 'kicked');
+  again.emit('setName', 'Bravo');
+  await kicked;
+});
+
+test('unban: non-hosts and non-banned targets are rejected as before', async () => {
+  const { host, roomCode } = await makeRoom();
+  const { g } = await addGuest(roomCode, 'Guest');
+  const e1 = once(g, 'unbanError');
+  g.emit('unbanPlayer', 'x');
+  assert.strictEqual(await e1, 'Only the host can unban players');
+  const e2 = once(host, 'unbanError');
+  host.emit('unbanPlayer', 'not-banned');
+  assert.strictEqual(await e2, 'Player is not banned');
+});
