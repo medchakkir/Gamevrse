@@ -3,6 +3,7 @@
 // behaviour, event names or payloads are changed here.
 const { attach } = require('./index');
 const { rooms } = require('./state');
+const { clearTimers } = require('../../shared/timers');
 
 module.exports = {
   id: 'blackjack',
@@ -15,4 +16,6 @@ module.exports = {
   },
   attach,
   listRooms: () => Object.keys(rooms),
+  // Clears every Blackjack timer/interval (labels are prefixed 'blackjack/') so the process can exit.
+  shutdown: () => clearTimers('blackjack/'),
 };

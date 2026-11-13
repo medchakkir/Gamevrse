@@ -15,7 +15,7 @@ handler error guard in `server.js`) runs before the game's own `attach`.
 | `config.supportsSpectators` | yes | boolean |
 | `attach(nsp, app)` | yes | registers the game's socket handlers (may be async) |
 | `listRooms()` | no | active room ids |
-| `shutdown()` | no | clear timers so the process can exit |
+| `shutdown()` | no | clear timers so the process can exit; called by `registry.shutdownAll()` |
 
 v0 intentionally excludes the per-room lifecycle methods (`createRoom`, `joinRoom`,
 `handleAction`, ...) from the blueprint; they are added in later versions, one at a
@@ -35,3 +35,14 @@ time, once the games are migrated and covered by tests.
 - (fixed) Blackjack room codes are now always 6 characters from a CSPRNG (`src/shared/roomCode.js`).
 - (fixed) Blackjack no longer blocks joins by IP alone; kicks ban the socket id and the name+IP identity (enforced at setName).
 - (fixed) Blackjack `unbanPlayer` now also lifts the name+IP identity ban from the same kick.
+
+## Graceful shutdown
+
+`createApp()` returns `shutdown()`; `npm start` calls it on SIGTERM/SIGINT (a second signal, or 10 s
+without finishing, forces exit 1). Order: stop accepting connections and disconnect sockets, let
+disconnect handlers run, call each registered game's `shutdown()`, then clear every remaining tracked
+timer (covers ColorRush and Rankly, which are not on the registry yet). Timers are tracked by
+`src/shared/timers.js` (`safeTimeout`/`safeInterval`, labelled `<game>/...`).
+
+Not done: active rooms are still lost on shutdown (no persistence), and clients get no
+"server restarting" event; they just see a disconnect.

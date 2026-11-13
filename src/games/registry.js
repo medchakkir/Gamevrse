@@ -27,7 +27,19 @@ function createRegistry() {
     return mod;
   }
 
-  return { register, get, list, attach, namespaceOf };
+  // Calls every game's optional shutdown(); one failing game must not stop the rest.
+  async function shutdownAll() {
+    for (const mod of games.values()) {
+      if (typeof mod.shutdown !== 'function') continue;
+      try {
+        await mod.shutdown();
+      } catch (err) {
+        console.error(`[gamevrse] shutdown error in ${mod.id}:`, err);
+      }
+    }
+  }
+
+  return { register, get, list, attach, namespaceOf, shutdownAll };
 }
 
 module.exports = { createRegistry };
