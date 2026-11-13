@@ -3,6 +3,8 @@ const { ctx } = require('./state');
 const { startNextRoundCountdown } = require('./countdowns');
 const { checkForVictoryAfterElimination, reassignHost, sendRoundSummary, updateState } = require('./roomState');
 const { ELIM_THRESHOLD, rooms } = require('./state');
+const logger = require('../../shared/logger');
+const { safeTimeout } = require('../../shared/timers');
 
 
 function processRouletteChoice(roomCode, playerId, choices) {
@@ -11,7 +13,7 @@ function processRouletteChoice(roomCode, playerId, choices) {
     return;
   }
 
-  console.log(`[ROULETTE] Processing choices for ${playerId}:`, choices);
+  logger.debug(`[ROULETTE] Processing choices for ${playerId}:`, choices);
 
   // Clear the choice timer
   if (room.rouletteChoiceTimer) {
@@ -28,7 +30,7 @@ function processRouletteChoice(roomCode, playerId, choices) {
   // Handle Second Chance Card usage
   if (choices.useSecondChance && player.hasSecondChance && !player.secondChanceUsed) {
     ctx.io.to(roomCode).emit('log', `🃏 ${player.name} chose to use their Second Chance Card!`);
-    console.log(`[SECOND CHANCE] ${player.name} chose to use their Second Chance Card`);
+    logger.debug(`[SECOND CHANCE] ${player.name} chose to use their Second Chance Card`);
   } else {
     ctx.io.to(roomCode).emit('log', `⚖️ ${player.name} chose Normal risk`);
   }
@@ -49,7 +51,7 @@ function processRouletteChoice(roomCode, playerId, choices) {
       });
       
       // After 3 seconds, show pulling trigger message
-      setTimeout(() => {
+      safeTimeout('blackjack/roulette#1', () => {
         ctx.io.to(roomCode).emit('log', `${player.name} is pulling the trigger...`);
       }, 3000);
       
@@ -74,7 +76,7 @@ function processRouletteChoice(roomCode, playerId, choices) {
   ctx.io.to(roomCode).emit('log', triggerMessage);
 
   // Process the actual roulette after timing delay
-  setTimeout(() => {
+  safeTimeout('blackjack/roulette#2', () => {
     executeRouletteResult(roomCode, playerId, ELIM_THRESHOLD, choices.useSecondChance || false);
   }, triggerDelay);
 }
@@ -95,7 +97,7 @@ function executeRouletteResult(roomCode, playerId, elimThreshold, useSecondChanc
   const isFinalTwo = alivePlayers.length === 2;
   const triggerAnimationDuration = isFinalTwo ? 5000 : 3500; // Match client-side timing
 
-  console.log(`[ROULETTE] ${player.name} rolled ${roll}, threshold ${elimThreshold}, would be eliminated: ${wouldBeEliminated}, using Second Chance: ${useSecondChance}`);
+  logger.debug(`[ROULETTE] ${player.name} rolled ${roll}, threshold ${elimThreshold}, would be eliminated: ${wouldBeEliminated}, using Second Chance: ${useSecondChance}`);
 
   // 🃏 NEW: Second Chance Card logic (player choice)
   let actuallyEliminated = wouldBeEliminated;
@@ -108,7 +110,7 @@ function executeRouletteResult(roomCode, playerId, elimThreshold, useSecondChanc
     player.hasSecondChance = false;
     player.secondChanceUsed = true;
     
-    console.log(`[SECOND CHANCE] ${player.name} used Second Chance Card by choice`);
+    logger.debug(`[SECOND CHANCE] ${player.name} used Second Chance Card by choice`);
     
     // Emit Second Chance event for client-side effects
     ctx.io.to(roomCode).emit('secondChanceUsed', {
@@ -119,19 +121,19 @@ function executeRouletteResult(roomCode, playerId, elimThreshold, useSecondChanc
     });
   }
 
-  console.log(`[SUSPENSE] Delaying result messages for ${triggerAnimationDuration}ms to preserve suspense`);
+  logger.debug(`[SUSPENSE] Delaying result messages for ${triggerAnimationDuration}ms to preserve suspense`);
 
   // 🎯 DELAY RESULT MESSAGES: Send after trigger animation completes
-  setTimeout(() => {
+  safeTimeout('blackjack/roulette#3', () => {
     if (secondChanceUsed) {
       ctx.io.to(roomCode).emit('log', `💀 ${player.name} rolled ${roll}/${elimThreshold} and should have been eliminated...`);
-      setTimeout(() => {
+      safeTimeout('blackjack/roulette#4', () => {
         ctx.io.to(roomCode).emit('log', `🃏 ${player.name} used their Second Chance Card and survived!`);
       }, 1000);
     } else if (actuallyEliminated) {
       ctx.io.to(roomCode).emit('log', `💀 ${player.name} rolled ${roll}/${elimThreshold} and was ELIMINATED!`);
       // Add additional context for spectators
-      setTimeout(() => {
+      safeTimeout('blackjack/roulette#5', () => {
         ctx.io.to(roomCode).emit('log', `👻 ${player.name} is now spectating the game`);
       }, 6000); // After death animation completes
     } else {
@@ -145,7 +147,7 @@ function executeRouletteResult(roomCode, playerId, elimThreshold, useSecondChanc
     room.roundsPlayed++;
     
     // Delay actual elimination to allow death animation
-    setTimeout(() => {
+    safeTimeout('blackjack/roulette#6', () => {
       if (room.players[playerId]) {
         room.players[playerId].alive = false;
         room.players[playerId].spectator = true;
@@ -163,10 +165,10 @@ function executeRouletteResult(roomCode, playerId, elimThreshold, useSecondChanc
 
   // 🎯 FIXED: Delay round summary until after death/survival animations complete
   const summaryDelay = actuallyEliminated ? 7000 : 5000; // 7s for death animation + transition, 5s for survival
-  setTimeout(() => {
+  safeTimeout('blackjack/roulette#7', () => {
     // Double-check that the game is still active before sending summary
     if (!room.gameOver && rooms[roomCode]) {
-      console.log(`[ROUND SUMMARY] Sending summary after ${summaryDelay}ms delay for ${player.name}`);
+      logger.debug(`[ROUND SUMMARY] Sending summary after ${summaryDelay}ms delay for ${player.name}`);
       sendRoundSummary(roomCode, player, roll, actuallyEliminated, secondChanceUsed);
     }
   }, summaryDelay);
@@ -185,10 +187,10 @@ function executeRouletteResult(roomCode, playerId, elimThreshold, useSecondChanc
 
   // If player survived (including Second Chance), start next round countdown after delay
   if (!actuallyEliminated) {
-    setTimeout(() => {
+    safeTimeout('blackjack/roulette#8', () => {
       const remainingAlive = Object.values(room.players).filter(p => p.alive && !p.spectator);
       if (remainingAlive.length > 1 && !room.gameOver) {
-        console.log(`[NEXT ROUND] Starting countdown after survivor processed result`);
+        logger.debug(`[NEXT ROUND] Starting countdown after survivor processed result`);
         startNextRoundCountdown(roomCode);
       }
     }, summaryDelay + 1000); // Extra delay after round summary

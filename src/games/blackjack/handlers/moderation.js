@@ -1,29 +1,24 @@
 const { ctx } = require('../state');
 const { updateState } = require('../roomState');
 const { rooms } = require('../state');
+const logger = require('../../../shared/logger');
 
 function register(socket) {
 
-  socket.on('testKick', () => {
-    console.log(`[TEST] Test kick event received from ${socket.id}`);
-    socket.emit('testKickResponse', 'Test successful');
-  });
-
-
   socket.on('unbanPlayer', (targetPlayerId) => {
-    console.log(`[UNBAN] Unban request from ${socket.id} for target ${targetPlayerId}`);
+    logger.debug(`[UNBAN] Unban request from ${socket.id} for target ${targetPlayerId}`);
     
     const roomCode = socket.data.roomCode;
     const room = rooms[roomCode];
     
     if (!room || !room.players[socket.id]) {
-      console.log(`[UNBAN] Failed - room or player not found`);
+      logger.debug(`[UNBAN] Failed - room or player not found`);
       return;
     }
     
     // Only room owner can unban players
     if (room.ownerId !== socket.id) {
-      console.log(`[UNBAN] Failed - not owner`);
+      logger.debug(`[UNBAN] Failed - not owner`);
       return socket.emit('unbanError', 'Only the host can unban players');
     }
     
@@ -34,7 +29,7 @@ function register(socket) {
     
     // Remove from banned list
     room.bannedPlayers.delete(targetPlayerId);
-    console.log(`[UNBAN] Removed ${targetPlayerId} from banned list for room ${roomCode}`);
+    logger.debug(`[UNBAN] Removed ${targetPlayerId} from banned list for room ${roomCode}`);
     
     // Log the unban action
     ctx.io.to(roomCode).emit('log', `Host has unbanned a player - they can now rejoin the room`);
@@ -47,44 +42,44 @@ function register(socket) {
 
 
   socket.on('kickPlayer', (targetPlayerId) => {
-    console.log(`[KICK] Kick request from ${socket.id} for target ${targetPlayerId}`);
+    logger.debug(`[KICK] Kick request from ${socket.id} for target ${targetPlayerId}`);
     
     const roomCode = socket.data.roomCode;
     const room = rooms[roomCode];
     
     if (!room || !room.players[socket.id]) {
-      console.log(`[KICK] Failed - room or player not found`);
+      logger.debug(`[KICK] Failed - room or player not found`);
       return;
     }
     
-    console.log(`[KICK] Room: ${roomCode}, Owner: ${room.ownerId}, Requester: ${socket.id}`);
+    logger.debug(`[KICK] Room: ${roomCode}, Owner: ${room.ownerId}, Requester: ${socket.id}`);
     
     // Only room owner can kick players
     if (room.ownerId !== socket.id) {
-      console.log(`[KICK] Failed - not owner`);
+      logger.debug(`[KICK] Failed - not owner`);
       return socket.emit('kickError', 'Only the host can kick players');
     }
     
     // Cannot kick during active rounds
     if (room.roundActive) {
-      console.log(`[KICK] Failed - round active`);
+      logger.debug(`[KICK] Failed - round active`);
       return socket.emit('kickError', 'Cannot kick players during active rounds');
     }
     
     // Cannot kick yourself
     if (targetPlayerId === socket.id) {
-      console.log(`[KICK] Failed - cannot kick self`);
+      logger.debug(`[KICK] Failed - cannot kick self`);
       return socket.emit('kickError', 'Cannot kick yourself');
     }
     
     // Check if target player exists
     const targetPlayer = room.players[targetPlayerId];
     if (!targetPlayer) {
-      console.log(`[KICK] Failed - target player not found`);
+      logger.debug(`[KICK] Failed - target player not found`);
       return socket.emit('kickError', 'Player not found');
     }
     
-    console.log(`[KICK] Kicking player: ${targetPlayer.name} (${targetPlayerId})`);
+    logger.debug(`[KICK] Kicking player: ${targetPlayer.name} (${targetPlayerId})`);
     
     // Find the target socket first to get IP address
     const kickTargetSocket = ctx.io.sockets.get(targetPlayerId);
@@ -103,22 +98,22 @@ function register(socket) {
       reason: 'kicked_by_host'
     });
     
-    console.log(`[KICK] Added ${targetPlayerId} to banned list for room ${roomCode}`);
-    console.log(`[KICK] Added identity ban: ${banKey}`);
+    logger.debug(`[KICK] Added ${targetPlayerId} to banned list for room ${roomCode}`);
+    logger.debug(`[KICK] Added identity ban: ${banKey}`);
     
     // Remove the player
     delete room.players[targetPlayerId];
     
     // Notify the target socket
     if (kickTargetSocket) {
-      console.log(`[KICK] Notifying target socket`);
+      logger.debug(`[KICK] Notifying target socket`);
       kickTargetSocket.leave(roomCode);
       kickTargetSocket.data.roomCode = null;
       kickTargetSocket.emit('kicked', {
         hostName: room.players[socket.id]?.name || 'Host'
       });
     } else {
-      console.log(`[KICK] Target socket not found`);
+      logger.debug(`[KICK] Target socket not found`);
     }
     
     // Log the kick action
@@ -144,7 +139,7 @@ function register(socket) {
       playerName: targetPlayer.name
     });
     
-    console.log(`[KICK] Kick completed successfully`);
+    logger.debug(`[KICK] Kick completed successfully`);
   });
 }
 

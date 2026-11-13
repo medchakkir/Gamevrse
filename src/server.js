@@ -6,6 +6,7 @@ const express = require('express');
 const compression = require('compression');
 const { Server } = require('socket.io');
 const config = require('./config');
+const logger = require('./shared/logger');
 
 // Wraps every listener a game registers with socket.on so a thrown error (or a
 // rejected promise) is logged instead of crashing the process. Must be attached
@@ -29,6 +30,14 @@ function guardNamespace(nsp) {
     socket.on = (event, fn) => (typeof fn === 'function' ? on(event, guardHandler(`${nsp.name}:${event}`, fn)) : on(event, fn));
   });
 }
+
+// Last-resort safety net: log (don't crash on) anything that escapes every guard.
+process.on('uncaughtException', (err) => {
+  console.error('[gamevrse] uncaughtException:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[gamevrse] unhandledRejection:', reason);
+});
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
@@ -61,7 +70,7 @@ async function createApp() {
 if (require.main === module) {
   createApp().then(({ server }) => {
     server.listen(config.port, () => {
-      console.log(`[gamevrse] listening on http://localhost:${config.port}`);
+      logger.info(`[gamevrse] listening on http://localhost:${config.port}`);
     });
   });
 }

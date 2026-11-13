@@ -3,6 +3,8 @@ const { clearNextRoundCountdown, clearReadyCountdown, startNextRoundCountdown } 
 const { checkVictoryCondition, reassignHost, resetRoomToLobby, setPhase, updateState } = require('../roomState');
 const { RETURN_TO_LOBBY_SECONDS, rooms } = require('../state');
 const { clearTurnTimer, nextTurn } = require('../turns');
+const logger = require('../../../shared/logger');
+const { safeTimeout } = require('../../../shared/timers');
 
 function register(socket) {
 
@@ -19,14 +21,14 @@ function register(socket) {
   const wasSpectator = player.spectator === true;
   const wasRoulettePlayer = room.rouletteChoiceActive && room.rouletteChoicePlayer === socket.id;
 
-  console.log(`[DISCONNECT] ${name} disconnecting - Spectator: ${wasSpectator}, Host: ${wasHost}, Roulette player: ${wasRoulettePlayer}`);
+  logger.debug(`[DISCONNECT] ${name} disconnecting - Spectator: ${wasSpectator}, Host: ${wasHost}, Roulette player: ${wasRoulettePlayer}`);
 
   clearReadyCountdown(roomCode);
   clearTurnTimer(roomCode);
 
   // 🎯 CRITICAL FIX: Handle spectators disconnecting differently - they shouldn't affect game flow
   if (wasSpectator && !wasRoulettePlayer && !wasHost) {
-    console.log(`[DISCONNECT] Spectator ${name} disconnecting - no game impact`);
+    logger.debug(`[DISCONNECT] Spectator ${name} disconnecting - no game impact`);
     
     // Simple spectator removal - no game flow changes needed
     delete room.players[socket.id];
@@ -62,7 +64,7 @@ function register(socket) {
 
   // 🎯 CRITICAL FIX: Handle roulette choice disconnection with proper flow
   if (wasRoulettePlayer) {
-    console.log(`[DISCONNECT] Clearing roulette choice for disconnected player ${name}`);
+    logger.debug(`[DISCONNECT] Clearing roulette choice for disconnected player ${name}`);
     
     // Clear roulette state
     if (room.rouletteChoiceTimer) {
@@ -94,11 +96,11 @@ function register(socket) {
     checkVictoryCondition(roomCode);
     
     // If game is still active, start next round countdown
-    setTimeout(() => {
+    safeTimeout('blackjack/handlers/disconnect#1', () => {
       if (rooms[roomCode] && !room.gameOver) {
         const remainingAlive = Object.values(room.players).filter(p => p.alive && !p.spectator);
         if (remainingAlive.length > 1) {
-          console.log(`[DISCONNECT] Starting next round countdown after roulette disconnection`);
+          logger.debug(`[DISCONNECT] Starting next round countdown after roulette disconnection`);
           
           // Clean up round state
           Object.values(room.players).forEach(p => {
@@ -133,7 +135,7 @@ function register(socket) {
   // 🎯 ENHANCED FIX: Check for Final 2 victory even if round is not active but game isn't over
   if (remainingAlive.length === 1 && !room.gameOver) {
     // 🎯 CRITICAL FIX: Immediate victory when opponent disconnects during Final 2
-    console.log(`[DISCONNECT] Final 2 disconnect - immediate victory for ${remainingAlive[0].name}`);
+    logger.debug(`[DISCONNECT] Final 2 disconnect - immediate victory for ${remainingAlive[0].name}`);
     
     const winner = remainingAlive[0];
     winner.wins = (winner.wins || 0) + 1;
@@ -162,7 +164,7 @@ function register(socket) {
     // Immediate victory announcement
     ctx.io.to(roomCode).emit('log', `🏆 ${winner.name} wins by default - opponent disconnected!`);
     
-    setTimeout(() => {
+    safeTimeout('blackjack/handlers/disconnect#2', () => {
       ctx.io.to(roomCode).emit('victory', {
         winnerId: winner.id,
         winnerName: winner.name
@@ -170,7 +172,7 @@ function register(socket) {
       updateState(roomCode);
       
       // Auto-return to lobby after victory animation
-      setTimeout(() => {
+      safeTimeout('blackjack/handlers/disconnect#3', () => {
         resetRoomToLobby(roomCode);
       }, RETURN_TO_LOBBY_SECONDS * 1000);
     }, 1000); // 1 second delay for message visibility
@@ -185,12 +187,12 @@ function register(socket) {
 
   // 🚨 CRITICAL FIX: Handle host disconnection during active game
   if (wasHost && room.roundActive) {
-    console.log(`[DISCONNECT] Host disconnected during active game in room ${roomCode}`);
+    logger.debug(`[DISCONNECT] Host disconnected during active game in room ${roomCode}`);
     const alivePlayers = Object.values(room.players).filter(p => p.alive && !p.spectator);
     
     if (alivePlayers.length <= 1) {
       // Force victory condition if only 1 or 0 players left
-      console.log(`[DISCONNECT] Forcing victory due to host disconnect with ${alivePlayers.length} players`);
+      logger.debug(`[DISCONNECT] Forcing victory due to host disconnect with ${alivePlayers.length} players`);
       checkVictoryCondition(roomCode);
     } else {
       // Emergency host transfer and continue game

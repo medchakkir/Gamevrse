@@ -1,6 +1,7 @@
 Object.assign(module.exports, { activateSecondChance, processSecondChanceRetry, resetSecondChanceRoundState, resetSecondChanceForNewMatch, activateFreeze, resumePlayerTimer }); // function declarations are hoisted, so cyclic requires resolve
 const { ctx } = require('./state');
 const { log, playerFreezeTimeouts } = require('./state');
+const { safeTimeout } = require('../../shared/timers');
 
 
 // ---------- Helpers ----------
@@ -110,7 +111,7 @@ function activateFreeze(room, playerId) {
   });
   
   // Set timeout to resume timer for THIS player (store in Map to avoid circular reference)
-  const timeout = setTimeout(() => {
+  const timeout = safeTimeout('colorrush/powerups#1', () => {
     resumePlayerTimer(room, playerId);
     playerFreezeTimeouts.delete(playerId);
   }, freezeDuration);

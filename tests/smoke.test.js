@@ -213,3 +213,58 @@ test('rankly: 500-character name is capped and bad avatar colors are replaced', 
   assert.strictEqual(guest.avatarTextColor, '#A1B2C3');
   s.close();
 });
+
+test('timers: a throwing or rejecting callback is logged, not fatal', async () => {
+  const { safeTimeout, safeInterval } = require('../src/shared/timers');
+  const errors = [];
+  const orig = console.error;
+  console.error = (...a) => errors.push(a.join(' '));
+  try {
+    const t = safeTimeout('test-throw', () => { throw new Error('boom'); }, 1);
+    const r = safeTimeout('test-reject', async () => { throw new Error('async boom'); }, 1);
+    let ticks = 0;
+    const i = safeInterval('test-interval', () => { ticks++; throw new Error('tick'); }, 5);
+    assert.ok(t && r && i, 'handles are returned');
+    await new Promise((res) => setTimeout(res, 40));
+    clearInterval(i);
+    assert.ok(ticks >= 2, 'interval keeps running after a throw');
+  } finally {
+    console.error = orig;
+  }
+  assert.ok(errors.some((e) => e.includes('[gamevrse] timer error in test-throw')));
+  assert.ok(errors.some((e) => e.includes('test-reject')));
+  const res = await fetch(base + '/healthz');
+  assert.strictEqual(res.status, 200, 'server still serves requests');
+});
+
+test('timers: returned handles can still be cleared', async () => {
+  const { safeTimeout } = require('../src/shared/timers');
+  let fired = false;
+  clearTimeout(safeTimeout('test-clear', () => { fired = true; }, 5));
+  await new Promise((res) => setTimeout(res, 30));
+  assert.strictEqual(fired, false);
+});
+
+test('admin route: rejects bad tokens with 403', async () => {
+  const body = JSON.stringify({ text: 'Best pizza topping?', difficulty: 'easy' });
+  const post = (headers, payload = body) =>
+    fetch(base + '/admin/add-question', { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: payload });
+
+  assert.strictEqual((await post({})).status, 403, 'missing header');
+  assert.strictEqual((await post({ 'x-admin-token': 'wrong-token' })).status, 403, 'wrong token');
+  assert.strictEqual((await post({ 'x-admin-token': '' })).status, 403, 'empty token');
+  const inBody = JSON.stringify({ text: 'Best pizza topping?', difficulty: 'easy', token: 'local-dev-token' });
+  assert.strictEqual((await post({}, inBody)).status, 403, 'token in body is ignored');
+});
+
+test('admin route: caps question text at 300 characters', async () => {
+  const send = (text) =>
+    fetch(base + '/admin/add-question', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-admin-token': 'local-dev-token' },
+      body: JSON.stringify({ text, difficulty: 'easy' }),
+    });
+  const res = await send('x'.repeat(301));
+  assert.strictEqual(res.status, 400);
+  assert.strictEqual((await res.json()).error, 'text_too_long');
+});

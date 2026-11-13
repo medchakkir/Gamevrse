@@ -1,6 +1,7 @@
 Object.assign(module.exports, { createBot, removeBot, getBotDecision, getBotDecisionStandardMode, getBotDecisionLowestHandMode, calculateRiskOfBeingLowest, getBotRouletteChoice }); // function declarations are hoisted, so cyclic requires resolve
 const { handValue } = require('./cards');
 const { bots } = require('./state');
+const logger = require('../../shared/logger');
 
 let botIdCounter = 0;
 
@@ -91,7 +92,7 @@ function getBotDecisionLowestHandMode(bot, gameState, handVal, difficulty) {
   const lowestOtherHand = otherHandValues.length > 0 ? Math.min(...otherHandValues) : 21;
   const averageOtherHand = otherHandValues.length > 0 ? otherHandValues.reduce((a, b) => a + b, 0) / otherHandValues.length : 18;
   
-  console.log(`[BOT AI] ${bot.name} (${handVal}) analyzing Lowest-Hand Mode - Others: [${otherHandValues.join(', ')}], Lowest: ${lowestOtherHand}`);
+  logger.debug(`[BOT AI] ${bot.name} (${handVal}) analyzing Lowest-Hand Mode - Others: [${otherHandValues.join(', ')}], Lowest: ${lowestOtherHand}`);
   
   if (difficulty === 'easy') {
     // Easy bots: Simple strategy - try to beat the lowest visible hand
@@ -179,7 +180,7 @@ function getBotRouletteChoice(bot, gameState) {
         useSecondChance = hasLowestHand && Math.random() < 0.9;
       }
       
-      console.log(`[BOT AI] ${bot.name} Lowest-Hand Mode roulette: myHand=${myHandValue}, lowestOther=${lowestOtherHand}, hasLowest=${hasLowestHand}, useSecondChance=${useSecondChance}`);
+      logger.debug(`[BOT AI] ${bot.name} Lowest-Hand Mode roulette: myHand=${myHandValue}, lowestOther=${lowestOtherHand}, hasLowest=${hasLowestHand}, useSecondChance=${useSecondChance}`);
       
     } else {
       // Standard Mode: Original logic
@@ -189,7 +190,7 @@ function getBotRouletteChoice(bot, gameState) {
       const useChance = difficulty === 'easy' ? 0.2 : difficulty === 'normal' ? 0.5 : 0.7;
       useSecondChance = Math.random() < useChance;
       
-      console.log(`[BOT AI] ${bot.name} Standard Mode roulette: useChance=${useChance}, useSecondChance=${useSecondChance}`);
+      logger.debug(`[BOT AI] ${bot.name} Standard Mode roulette: useChance=${useChance}, useSecondChance=${useSecondChance}`);
     }
   }
   

@@ -6,6 +6,8 @@ const { clearNextRoundCountdown, clearReadyCountdown, startNextRoundCountdown } 
 const { processRouletteChoice } = require('./roulette');
 const { RETURN_TO_LOBBY_SECONDS, playersByToken, rooms } = require('./state');
 const { clearTurnTimer, nextTurn } = require('./turns');
+const logger = require('../../shared/logger');
+const { safeInterval, safeTimeout } = require('../../shared/timers');
 
 
 function makeToken() {
@@ -168,7 +170,7 @@ function detectAndResolveSoftLocks() {
     if (room.rouletteChoiceActive && room.rouletteChoicePlayer) {
       const rouletteStartTime = room.rouletteChoiceStartTime || now;
       if (now - rouletteStartTime > 120000) { // 2 minutes
-        console.warn(`[SOFT-LOCK] Roulette choice stuck in room ${roomCode} - auto-resolving`);
+        logger.warn(`[SOFT-LOCK] Roulette choice stuck in room ${roomCode} - auto-resolving`);
         
         // Auto-process with default choices
         processRouletteChoice(roomCode, room.rouletteChoicePlayer, {
@@ -180,7 +182,7 @@ function detectAndResolveSoftLocks() {
     
     // Detect stuck turns (timeout after 3 minutes)
     if (room.turnDeadline && now - room.turnDeadline > 180000) { // 3 minutes past deadline
-      console.warn(`[SOFT-LOCK] Turn stuck in room ${roomCode} - auto-resolving`);
+      logger.warn(`[SOFT-LOCK] Turn stuck in room ${roomCode} - auto-resolving`);
       
       const currentPlayerId = room.currentPlayerOrder[room.turnIndex];
       const currentPlayer = room.players[currentPlayerId];
@@ -194,7 +196,7 @@ function detectAndResolveSoftLocks() {
     
     // Detect games with no valid players (shouldn't happen but safety check)
     if (alivePlayers.length === 0 && room.roundActive) {
-      console.warn(`[SOFT-LOCK] No alive players in active room ${roomCode} - resetting`);
+      logger.warn(`[SOFT-LOCK] No alive players in active room ${roomCode} - resetting`);
       
       room.roundActive = false;
       room.gameOver = false;
@@ -205,7 +207,7 @@ function detectAndResolveSoftLocks() {
 }
 
 // Run soft-lock detection every 30 seconds
-setInterval(detectAndResolveSoftLocks, 30000);
+safeInterval('blackjack/roomState#1', detectAndResolveSoftLocks, 30000);
 
 
 function checkVictoryCondition(roomCode) {
@@ -218,11 +220,11 @@ function checkVictoryCondition(roomCode) {
 
   const alivePlayers = Object.values(room.players).filter(p => p.alive && !p.spectator);
   
-  console.log(`[VICTORY CHECK] Room ${roomCode}: ${alivePlayers.length} alive players (roundActive: ${room.roundActive}, gameOver: ${room.gameOver})`);
+  logger.debug(`[VICTORY CHECK] Room ${roomCode}: ${alivePlayers.length} alive players (roundActive: ${room.roundActive}, gameOver: ${room.gameOver})`);
 
   // 🏆 CRITICAL: Check for victory condition (1 or 0 players left)
   if (alivePlayers.length <= 1) {
-    console.log(`[VICTORY] Victory condition met in room ${roomCode}`);
+    logger.debug(`[VICTORY] Victory condition met in room ${roomCode}`);
     
     // Clear any active timers
     clearTurnTimer(roomCode);
@@ -237,7 +239,7 @@ function checkVictoryCondition(roomCode) {
       room.winnerId = winner.id;
       room.roundActive = false;
       
-      console.log(`[VICTORY] ${winner.name} wins the game!`);
+      logger.debug(`[VICTORY] ${winner.name} wins the game!`);
       
       // Emit victory to all players
       ctx.io.to(roomCode).emit('victory', {
@@ -250,7 +252,7 @@ function checkVictoryCondition(roomCode) {
       
     } else {
       // No players left - shouldn't happen but handle gracefully
-      console.log(`[VICTORY] No players left in room ${roomCode} - cleaning up`);
+      logger.info(`[VICTORY] No players left in room ${roomCode} - cleaning up`);
       delete rooms[roomCode];
     }
   }
@@ -265,22 +267,22 @@ function startReturnToLobbyCountdown(roomCode) {
   room.returningToLobby = true;
   let timeLeft = RETURN_TO_LOBBY_SECONDS;
   
-  console.log(`[RETURN COUNTDOWN] Starting ${RETURN_TO_LOBBY_SECONDS}s countdown for room ${roomCode}`);
+  logger.debug(`[RETURN COUNTDOWN] Starting ${RETURN_TO_LOBBY_SECONDS}s countdown for room ${roomCode}`);
   
   // Send initial countdown
   ctx.io.to(roomCode).emit('returnToLobbyCountdown', { timeLeft });
   
-  const countdownInterval = setInterval(() => {
+  const countdownInterval = safeInterval('blackjack/roomState#2', () => {
     timeLeft--;
     
     if (timeLeft > 0) {
       // Send countdown update
       ctx.io.to(roomCode).emit('returnToLobbyCountdown', { timeLeft });
-      console.log(`[RETURN COUNTDOWN] Room ${roomCode}: ${timeLeft}s remaining`);
+      logger.debug(`[RETURN COUNTDOWN] Room ${roomCode}: ${timeLeft}s remaining`);
     } else {
       // Countdown finished - return to lobby
       clearInterval(countdownInterval);
-      console.log(`[RETURN COUNTDOWN] Room ${roomCode}: Returning to lobby now`);
+      logger.debug(`[RETURN COUNTDOWN] Room ${roomCode}: Returning to lobby now`);
       
       // Reset all players for new game
       Object.values(room.players).forEach(p => {
@@ -324,7 +326,7 @@ function clearReturnCountdown(roomCode) {
   const room = rooms[roomCode];
   if (room?.returnCountdownInterval) {
     clearInterval(room.returnCountdownInterval);
-    console.log(`[RETURN COUNTDOWN] Cleared countdown interval for room ${roomCode}`);
+    logger.debug(`[RETURN COUNTDOWN] Cleared countdown interval for room ${roomCode}`);
     room.returnCountdownInterval = null;
     room.returningToLobby = false;
   }
@@ -390,7 +392,7 @@ function checkForVictoryAfterElimination(roomCode) {
     winner.wins++;
     setPhase(roomCode, 'postgame');
 
-    setTimeout(() => {
+    safeTimeout('blackjack/roomState#3', () => {
       ctx.io.to(roomCode).emit('victory', {
         winnerId: winner.id,
         winnerName: winner.name
@@ -398,14 +400,14 @@ function checkForVictoryAfterElimination(roomCode) {
       updateState(roomCode);
       
       // Auto-return to lobby after victory animation
-      setTimeout(() => {
+      safeTimeout('blackjack/roomState#4', () => {
         resetRoomToLobby(roomCode);
       }, RETURN_TO_LOBBY_SECONDS * 1000);
     }, 1000); // 1 second delay to ensure elimination is processed
   } else if (remainingAlive.length > 1 && !room.gameOver) {
     // Continue game - start next round countdown
-    setTimeout(() => {
-      console.log(`[NEXT ROUND] Starting countdown after elimination processed`);
+    safeTimeout('blackjack/roomState#5', () => {
+      logger.debug(`[NEXT ROUND] Starting countdown after elimination processed`);
       startNextRoundCountdown(roomCode);
     }, 2000);
   }

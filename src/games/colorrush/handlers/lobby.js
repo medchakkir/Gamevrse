@@ -5,6 +5,7 @@ const { startNextRound, waitForReadies } = require('../rounds');
 const { log, playerRoom } = require('../state');
 const { clearAllRoomTimers } = require('../timers');
 const { rooms, createRoom, getRoom, removeRoom } = require('../rooms');
+const logger = require('../../../shared/logger');
 
 function register(socket) {
 
@@ -42,7 +43,7 @@ function register(socket) {
 
     socket.emit("youAreHost");
 
-    log(`[createRoom] SUCCESS: Room ${room.id} created by ${socket.id} (${name})`);
+    logger.info(`[createRoom] SUCCESS: Room ${room.id} created by ${socket.id} (${name})`);
     log(`[createRoom] Total rooms in memory: ${Object.keys(rooms).length}`);
     log(`[createRoom] Available rooms: [${Object.keys(rooms).join(', ')}]`);
   });
@@ -171,7 +172,7 @@ function register(socket) {
       clearAllRoomTimers(room);
       
       removeRoom(roomId);
-      log(`[leaveRoom] Room ${roomId} deleted (empty)`);
+      logger.info(`[leaveRoom] Room ${roomId} deleted (empty)`);
       log(`[leaveRoom] Remaining rooms: [${Object.keys(rooms).join(', ')}]`);
     } else {
       // Broadcast updated state to remaining players

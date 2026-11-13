@@ -1494,11 +1494,6 @@ const kickCancelBtn = document.getElementById('kickCancelBtn');
 
 let pendingKickData = null;
 
-// Test kick connection
-socket.on('testKickResponse', (message) => {
-  console.log('[TEST] Received test response:', message);
-});
-
 // Handle kick player events
 window.addEventListener('requestKickPlayer', (e) => {
   const { playerId, playerName } = e.detail;

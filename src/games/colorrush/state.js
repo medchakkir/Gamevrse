@@ -1,3 +1,4 @@
+const logger = require('../../shared/logger');
 // Shared runtime state and constants for ColorRush.
 // `ctx.io` is the Socket.IO namespace, assigned by attach() in index.js.
 const ctx = { io: null };
@@ -37,6 +38,6 @@ const PHASE_PLAY = "PLAY";
 
 const PHASE_ROUND_END = "ROUND_END";
 
-function log(...args) { console.log.apply(console, args); }
+function log(...args) { logger.debug(...args); }
 
 module.exports = { ctx, log, playerRoom, playerFreezeTimeouts, COLORS, DEFAULT_GAME_SETTINGS, READY_TIMEOUT_MS, ROUND_DURATION_MS, TIMER_UPDATE_INTERVAL, PHASE_GET_READY, PHASE_SEQUENCE, PHASE_PLAY, PHASE_ROUND_END };

@@ -3,6 +3,9 @@
 // =============================================================
 
 import { countConnectedPlayers } from "./roomManager.js";
+import logger from "../../shared/logger.js";
+import timers from "../../shared/timers.js";
+const { safeTimeout } = timers;
 
 export function beginStartCountdown(roomId, question, rooms, io, startRoundNow, countdownMs = 60000) {
   const room = rooms[roomId];
@@ -29,12 +32,12 @@ export function beginStartCountdown(roomId, question, rooms, io, startRoundNow, 
 
   // ✅ CHECK: If all non-host players are already ready, start immediately
   if (nonHost.length > 0 && readyCount === nonHost.length) {
-    console.log(`[auto-start] All players ready - starting immediately`);
+    logger.debug(`[auto-start] All players ready - starting immediately`);
     startRoundNow(roomId);
     return;
   }
 
-  room._startTimer = setTimeout(() => {
+  room._startTimer = safeTimeout('rankly/countdownService#1', () => {
     room._startTimer = null;
 
     // 🛑 SAFETY: only start if still in countdown

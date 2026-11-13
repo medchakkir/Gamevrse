@@ -6,20 +6,22 @@ const { clearNextRoundCountdown, clearReadyCountdown, startNextRoundCountdown } 
 const { resetRoomToLobby, setPhase, updateState } = require('./roomState');
 const { processRouletteChoice } = require('./roulette');
 const { RETURN_TO_LOBBY_SECONDS, ROULETTE_CHOICE_TIMEOUT_MS, TURN_EMIT_BUFFER_MS, TURN_MS, bots, rooms } = require('./state');
+const logger = require('../../shared/logger');
+const { safeTimeout } = require('../../shared/timers');
 
 
 function clearTurnTimer(roomCode) {
   const room = rooms[roomCode];
   if (room?.turnTimer) {
     clearTimeout(room.turnTimer);
-    console.log(`[TIMER] Cleared turn timer for room ${roomCode}`);
+    logger.debug(`[TIMER] Cleared turn timer for room ${roomCode}`);
   }
   if (room) {
     room.turnTimer = null;
     room.turnDeadline = null;
     // Only emit null deadline when we're actually clearing (not during transitions)
     ctx.io.to(roomCode).emit('turnDeadline', { deadline: null });
-    console.log(`[TIMER] Sent null turnDeadline to clear client timers for room ${roomCode}`);
+    logger.debug(`[TIMER] Sent null turnDeadline to clear client timers for room ${roomCode}`);
   }
 }
 
@@ -27,12 +29,12 @@ function clearTurnTimer(roomCode) {
 function startTurnTimer(roomCode) {
   const room = rooms[roomCode];
   if (!room) {
-    console.log(`[TIMER] ERROR: Room ${roomCode} not found`);
+    logger.error(`[TIMER] ERROR: Room ${roomCode} not found`);
     return;
   }
   
   if (!room.roundActive) {
-    console.log(`[TIMER] ERROR: Round not active in room ${roomCode}, cannot start timer`);
+    logger.error(`[TIMER] ERROR: Round not active in room ${roomCode}, cannot start timer`);
     return;
   }
 
@@ -40,32 +42,32 @@ function startTurnTimer(roomCode) {
   const currentPlayer = room.players[currentId];
   
   if (!currentPlayer) {
-    console.log(`[TIMER] ERROR: No current player found for room ${roomCode} at index ${room.turnIndex}`);
+    logger.error(`[TIMER] ERROR: No current player found for room ${roomCode} at index ${room.turnIndex}`);
     return;
   }
 
   // Clear any existing timer WITHOUT emitting null deadline
   if (room.turnTimer) {
-    console.log(`[TIMER] Clearing existing timer before starting new one for room ${roomCode}`);
+    logger.debug(`[TIMER] Clearing existing timer before starting new one for room ${roomCode}`);
     clearTimeout(room.turnTimer);
     room.turnTimer = null;
   }
 
-  console.log(`[TIMER] Starting 15s timer for ${currentPlayer.name} in room ${roomCode} (isBot: ${currentPlayer.isBot})`);
+  logger.debug(`[TIMER] Starting 15s timer for ${currentPlayer.name} in room ${roomCode} (isBot: ${currentPlayer.isBot})`);
 
   // Handle bot turns immediately
   if (currentPlayer.isBot) {
-    console.log(`[TIMER] Bot turn - scheduling decision for ${currentPlayer.name}`);
+    logger.debug(`[TIMER] Bot turn - scheduling decision for ${currentPlayer.name}`);
     // For bots, don't set a timer, just process their decision
-    setTimeout(() => {
+    safeTimeout('blackjack/turns#1', () => {
       // Double-check room is still active
       if (!room.roundActive || room.endingRound) {
-        console.log(`[BOT] Skipping bot decision - round no longer active`);
+        logger.debug(`[BOT] Skipping bot decision - round no longer active`);
         return;
       }
       
       const decision = getBotDecision(currentPlayer, room);
-      console.log(`[BOT] ${currentPlayer.name} decides to ${decision}`);
+      logger.debug(`[BOT] ${currentPlayer.name} decides to ${decision}`);
       
       if (decision === 'hit') {
         // Bot hits
@@ -94,20 +96,20 @@ function startTurnTimer(roomCode) {
   
   // Emit the deadline to all clients FIRST
   ctx.io.to(roomCode).emit('turnDeadline', { deadline: deadline + TURN_EMIT_BUFFER_MS });
-  console.log(`[TIMER] ✅ SENT turnDeadline event for ${currentPlayer.name} in room ${roomCode} - deadline: ${new Date(deadline + TURN_EMIT_BUFFER_MS)}`);
+  logger.debug(`[TIMER] ✅ SENT turnDeadline event for ${currentPlayer.name} in room ${roomCode} - deadline: ${new Date(deadline + TURN_EMIT_BUFFER_MS)}`);
 
   // THEN set the server timeout
-  room.turnTimer = setTimeout(() => {
-    console.log(`[TIMEOUT] Timer fired for ${currentPlayer.name} in room ${roomCode}`);
+  room.turnTimer = safeTimeout('blackjack/turns#2', () => {
+    logger.debug(`[TIMEOUT] Timer fired for ${currentPlayer.name} in room ${roomCode}`);
     
     const p = room.players[currentId];
     if (p && p.alive && !p.busted && !p.stood) {
       p.stood = true;
       ctx.io.to(roomCode).emit('log', `⏰ ${p.name} ran out of time and auto-stood`);
-      console.log(`[TIMEOUT] ${p.name} timed out in room ${roomCode} - calling nextTurn`);
+      logger.debug(`[TIMEOUT] ${p.name} timed out in room ${roomCode} - calling nextTurn`);
       nextTurn(roomCode);
     } else {
-      console.log(`[TIMEOUT] Player ${currentPlayer.name} no longer valid for timeout action`);
+      logger.debug(`[TIMEOUT] Player ${currentPlayer.name} no longer valid for timeout action`);
     }
     
     // Clear timer after timeout
@@ -115,7 +117,7 @@ function startTurnTimer(roomCode) {
     room.turnDeadline = null;
   }, TURN_MS + 50);
   
-  console.log(`[TIMER] ✅ Timer successfully set for ${currentPlayer.name} in room ${roomCode}`);
+  logger.debug(`[TIMER] ✅ Timer successfully set for ${currentPlayer.name} in room ${roomCode}`);
 }
 
 
@@ -130,7 +132,7 @@ function verifyTimerState(roomCode) {
   if (currentPlayer && currentPlayer.alive && !currentPlayer.busted && !currentPlayer.stood) {
     // We have a valid current player who should have a timer
     if (!currentPlayer.isBot && !room.turnTimer) {
-      console.log(`[TIMER VERIFY] ⚠️ MISSING TIMER for ${currentPlayer.name} in room ${roomCode} - starting now!`);
+      logger.debug(`[TIMER VERIFY] ⚠️ MISSING TIMER for ${currentPlayer.name} in room ${roomCode} - starting now!`);
       startTurnTimer(roomCode);
     }
   }
@@ -140,15 +142,15 @@ function verifyTimerState(roomCode) {
 function nextTurn(roomCode) {
   const room = rooms[roomCode];
   if (!room) {
-    console.log(`[NEXT TURN] ERROR: Room ${roomCode} not found`);
+    logger.error(`[NEXT TURN] ERROR: Room ${roomCode} not found`);
     return;
   }
 
-  console.log(`[NEXT TURN] Called for room ${roomCode}, roundActive: ${room.roundActive}, endingRound: ${room.endingRound}`);
+  logger.debug(`[NEXT TURN] Called for room ${roomCode}, roundActive: ${room.roundActive}, endingRound: ${room.endingRound}`);
 
   // Don't advance turns if round is ending or not active
   if (!room.roundActive || room.endingRound) {
-    console.log(`[NEXT TURN] Skipping - round not active or ending in room ${roomCode}`);
+    logger.debug(`[NEXT TURN] Skipping - round not active or ending in room ${roomCode}`);
     return;
   }
 
@@ -157,14 +159,14 @@ function nextTurn(roomCode) {
     clearTimeout(room.turnTimer);
     room.turnTimer = null;
     room.turnDeadline = null;
-    console.log(`[NEXT TURN] Cleared existing timer in room ${roomCode}`);
+    logger.debug(`[NEXT TURN] Cleared existing timer in room ${roomCode}`);
   }
 
   const order = room.currentPlayerOrder;
   
   // Step 1: Make sure we have players to check
   if (order.length === 0) {
-    console.log(`[NEXT TURN] No players left, ending round in room ${roomCode}`);
+    logger.debug(`[NEXT TURN] No players left, ending round in room ${roomCode}`);
     endRound(roomCode);
     return;
   }
@@ -186,7 +188,7 @@ function nextTurn(roomCode) {
     if (p && p.alive && !p.busted && !p.stood) {
       // Step 2: Make sure index is valid before setting
       room.turnIndex = Math.max(0, Math.min(idx, order.length - 1));
-      console.log(`[NEXT TURN] Moving to ${p.name} (index ${room.turnIndex}) in room ${roomCode}`);
+      logger.debug(`[NEXT TURN] Moving to ${p.name} (index ${room.turnIndex}) in room ${roomCode}`);
       
       foundValidPlayer = true;
       
@@ -194,19 +196,19 @@ function nextTurn(roomCode) {
       updateState(roomCode);
       
       // CRITICAL: ALWAYS start fresh timer for new player - GUARANTEED
-      console.log(`[NEXT TURN] About to start timer for ${p.name} in room ${roomCode}`);
+      logger.debug(`[NEXT TURN] About to start timer for ${p.name} in room ${roomCode}`);
       startTurnTimer(roomCode);
-      console.log(`[NEXT TURN] Timer start completed for ${p.name} in room ${roomCode}`);
+      logger.debug(`[NEXT TURN] Timer start completed for ${p.name} in room ${roomCode}`);
       
       // CRITICAL: Verify timer was actually set (failsafe)
-      setTimeout(() => verifyTimerState(roomCode), 100);
+      safeTimeout('blackjack/turns#3', () => verifyTimerState(roomCode), 100);
       
       return;
     }
   }
   
   if (!foundValidPlayer) {
-    console.log(`[NEXT TURN] No more players with turns, ending round in room ${roomCode}`);
+    logger.debug(`[NEXT TURN] No more players with turns, ending round in room ${roomCode}`);
     endRound(roomCode);
   }
 }
@@ -224,7 +226,7 @@ function startRound(roomCode) {
     
     // Show Second Chance Card status
     if (p.hasSecondChance && !p.secondChanceUsed) {
-      console.log(`[SECOND CHANCE] ${p.name} has a Second Chance Card for this game`);
+      logger.debug(`[SECOND CHANCE] ${p.name} has a Second Chance Card for this game`);
     }
   });
 
@@ -263,7 +265,7 @@ function startRound(roomCode) {
   startTurnTimer(roomCode);
   
   // CRITICAL: Verify first player gets timer (failsafe)
-  setTimeout(() => verifyTimerState(roomCode), 100);
+  safeTimeout('blackjack/turns#4', () => verifyTimerState(roomCode), 100);
 }
 
 
@@ -303,7 +305,7 @@ function endRound(roomCode) {
     updateState(roomCode);
 
     // 🔄 Auto-return to lobby after 8 seconds
-    setTimeout(() => {
+    safeTimeout('blackjack/turns#5', () => {
       resetRoomToLobby(roomCode);
     }, RETURN_TO_LOBBY_SECONDS * 1000);
 
@@ -312,7 +314,7 @@ function endRound(roomCode) {
 
   // 🛑 SAFETY: If no alive players, reset safely
   if (alive.length === 0) {
-    console.warn('[END ROUND] No alive players found. Resetting round safely.');
+    logger.warn('[END ROUND] No alive players found. Resetting round safely.');
     room.roundActive = false;
     room.endingRound = false;
     room.triggerLocked = false;
@@ -351,13 +353,13 @@ function endRound(roomCode) {
   if (isFinalTwo && busted.length === 1) {
     // FINAL 2 RULE: If exactly one player is busted, they must go to roulette regardless of mode
     candidates = busted;
-    console.log(`[ROULETTE] Final 2 Bust Override - busted player selected regardless of elimination mode`);
+    logger.debug(`[ROULETTE] Final 2 Bust Override - busted player selected regardless of elimination mode`);
     ctx.io.to(roomCode).emit('log', '⚡ Final 2 rule applied: Bust overrides Lowest-Hand Mode');
   } else {
     // 🎯 NORMAL: Mode-aware loser selection logic
     if (room.rules.eliminationMode === 'lowestHand') {
       // LOWEST-HAND MODE: Always select lowest hand, ignore bust status for roulette
-      console.log(`[ROULETTE] Lowest-Hand Mode - selecting from all alive players by lowest hand`);
+      logger.debug(`[ROULETTE] Lowest-Hand Mode - selecting from all alive players by lowest hand`);
     
     // Calculate lowest hand among ALL alive players (busted or not)
     const lowestValue = Math.min(
@@ -368,8 +370,8 @@ function endRound(roomCode) {
       p => handValue(p.hand) === lowestValue
     );
 
-    console.log(`[ROULETTE] All alive players: ${alive.map(p => `${p.name}(${handValue(p.hand)}${p.busted ? ', BUSTED' : ''})`).join(', ')}`);
-    console.log(`[ROULETTE] Lowest value: ${lowestValue}, candidates: ${candidates.map(p => p.name).join(', ')}`);
+    logger.debug(`[ROULETTE] All alive players: ${alive.map(p => `${p.name}(${handValue(p.hand)}${p.busted ? ', BUSTED' : ''})`).join(', ')}`);
+    logger.debug(`[ROULETTE] Lowest value: ${lowestValue}, candidates: ${candidates.map(p => p.name).join(', ')}`);
 
     ctx.io.to(roomCode).emit(
       'log',
@@ -380,8 +382,8 @@ function endRound(roomCode) {
     // RULE 1: If anyone busted → busted players ONLY
     if (busted.length > 0) {
       candidates = busted;
-      console.log(`[ROULETTE] Standard Mode - Busted players found - selecting from busted players`);
-      console.log(`[ROULETTE] Busted candidates: ${busted.map(p => `${p.name}(secondChance:${p.hasSecondChance && !p.secondChanceUsed})`).join(', ')}`);
+      logger.debug(`[ROULETTE] Standard Mode - Busted players found - selecting from busted players`);
+      logger.debug(`[ROULETTE] Busted candidates: ${busted.map(p => `${p.name}(secondChance:${p.hasSecondChance && !p.secondChanceUsed})`).join(', ')}`);
       ctx.io.to(roomCode).emit(
         'log',
         '💥 Busting players are at highest risk!'
@@ -389,7 +391,7 @@ function endRound(roomCode) {
     }
     // RULE 2: No one busted → lowest hand players
     else {
-      console.log(`[ROULETTE] Standard Mode - No one busted - selecting from lowest hand players`);
+      logger.debug(`[ROULETTE] Standard Mode - No one busted - selecting from lowest hand players`);
       
       // Calculate lowest hand among all non-busted players
       const lowestValue = Math.min(
@@ -400,8 +402,8 @@ function endRound(roomCode) {
         p => handValue(p.hand) === lowestValue
       );
 
-      console.log(`[ROULETTE] Non-busted players: ${nonBusted.map(p => `${p.name}(${handValue(p.hand)}, secondChance:${p.hasSecondChance && !p.secondChanceUsed})`).join(', ')}`);
-      console.log(`[ROULETTE] Lowest value: ${lowestValue}, candidates: ${candidates.map(p => p.name).join(', ')}`);
+      logger.debug(`[ROULETTE] Non-busted players: ${nonBusted.map(p => `${p.name}(${handValue(p.hand)}, secondChance:${p.hasSecondChance && !p.secondChanceUsed})`).join(', ')}`);
+      logger.debug(`[ROULETTE] Lowest value: ${lowestValue}, candidates: ${candidates.map(p => p.name).join(', ')}`);
 
       ctx.io.to(roomCode).emit(
         'log',
@@ -414,7 +416,7 @@ function endRound(roomCode) {
   // Select from candidates (Second Chance Cards are player choices)
   const chosen = candidates[Math.floor(Math.random() * candidates.length)];
   
-  console.log(`[ROULETTE] Selected ${chosen.name} from ${candidates.length} eligible candidates`);
+  logger.debug(`[ROULETTE] Selected ${chosen.name} from ${candidates.length} eligible candidates`);
   
   setPhase(roomCode, 'trigger');
 
@@ -427,9 +429,9 @@ function endRound(roomCode) {
   // Handle bot roulette choice
   if (chosen.isBot) {
     const botChoice = getBotRouletteChoice(chosen, room);
-    console.log(`[BOT] ${chosen.name} chooses:`, botChoice);
+    logger.debug(`[BOT] ${chosen.name} chooses:`, botChoice);
     
-    setTimeout(() => {
+    safeTimeout('blackjack/turns#6', () => {
       processRouletteChoice(roomCode, chosen.id, botChoice);
     }, 2000 + Math.random() * 3000); // 2-5 second delay
     
@@ -452,9 +454,9 @@ function endRound(roomCode) {
   }
 
   // Auto-fallback after timeout
-  room.rouletteChoiceTimer = setTimeout(() => {
+  room.rouletteChoiceTimer = safeTimeout('blackjack/turns#7', () => {
     if (room.rouletteChoiceActive && room.rouletteChoicePlayer === chosen.id) {
-      console.log(`[ROULETTE] Auto-fallback for ${chosen.name}`);
+      logger.debug(`[ROULETTE] Auto-fallback for ${chosen.name}`);
       processRouletteChoice(roomCode, chosen.id, {
         useSecondChance: false,
         timing: 'pullNow'
