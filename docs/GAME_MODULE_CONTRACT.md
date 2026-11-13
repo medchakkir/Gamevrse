@@ -29,8 +29,8 @@ time, once the games are migrated and covered by tests.
 | ColorRush | no | still attached directly in `server.js` |
 | Rankly | no | ESM; needs the CJS/ESM boundary resolved first |
 
-## Known behaviours deliberately preserved (fix later, separately)
+## Known behaviours: preserved during migration, then fixed or pending
 
-- Blackjack `hit`/`stand` do not check that it is the caller's turn at handler level.
-- Blackjack room codes use `Math.random().toString(36).slice(2,8)` and may be shorter than 6 characters.
+- (fixed) Blackjack `hit`/`stand` now require it to be the caller's turn.
+- (fixed) Blackjack room codes are now always 6 characters from a CSPRNG (`src/shared/roomCode.js`).
 - Blackjack kicks ban by IP.

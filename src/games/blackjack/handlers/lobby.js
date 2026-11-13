@@ -5,22 +5,18 @@ const { checkVictoryCondition, createRoom, makeToken, reassignHost, resetRoomToL
 const { bots, playersByToken, rooms } = require('../state');
 const { nextTurn } = require('../turns');
 const logger = require('../../../shared/logger');
+const { generateRoomCode } = require('../../../shared/roomCode');
 const { safeTimeout } = require('../../../shared/timers');
 
 function register(socket) {
 
   socket.on('createRoom', () => {
-  // Step 1: Try to create a unique room code
+  // Step 1: Generate a unique 6-character room code (CSPRNG, see shared/roomCode.js)
   let code;
-  let attempts = 0;
-  
-  do {
-    code = Math.random().toString(36).slice(2,8).toUpperCase();
-    attempts++;
-  } while (rooms[code] && attempts < 10); // Keep trying if code already exists
-  
-  // Step 2: If we couldn't find a unique code, tell the player
-  if (rooms[code]) {
+  try {
+    code = generateRoomCode((c) => Boolean(rooms[c]));
+  } catch {
+    // Step 2: If we couldn't find a unique code, tell the player
     return socket.emit('roomError', 'Failed to create room. Please try again.');
   }
   

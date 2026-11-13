@@ -357,3 +357,25 @@ test('turn: the current player can still hit and stand', async () => {
   assert.strictEqual(room.players[current.id].hand.length, before);
   assert.ok(other);
 });
+
+// ---- Room codes (fix: codes could be shorter than 6 chars and then be impossible to join) ----
+test('createRoom: code is always 6 chars even when Math.random yields a short base-36 string', async () => {
+  const realRandom = Math.random;
+  Math.random = () => 0.5; // (0.5).toString(36) === '0.i' -> old code produced a 1-char room code
+  let roomCode;
+  try {
+    const s = await client();
+    const joined = once(s, 'roomJoined');
+    s.emit('createRoom');
+    ({ roomCode } = await joined);
+  } finally {
+    Math.random = realRandom;
+  }
+  assert.match(roomCode, /^[A-Z0-9]{6}$/);
+
+  // ...and a second client can actually join it.
+  const g = await client();
+  const joined = once(g, 'roomJoined');
+  g.emit('joinRoom', roomCode);
+  assert.strictEqual((await joined).roomCode, roomCode);
+});
