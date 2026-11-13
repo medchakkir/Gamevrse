@@ -6,6 +6,7 @@ const { PHASE_GET_READY, PHASE_PLAY, PHASE_SEQUENCE, log, playerRoom } = require
 const { enterSuddenDeathPlayPhase, handleTieBreakerSubmission, resolveSuddenDeathRound } = require('../suddenDeath');
 const { clearRoundTimer } = require('../timers');
 const { getRoom } = require('../rooms');
+const { safeTimeout } = require('../../../shared/timers');
 
 function register(socket) {
   // Per-socket chat throttle (lives in this closure, so it is released on disconnect)
@@ -345,7 +346,7 @@ function register(socket) {
             // Still emit playerEliminated to update scoreboard for other players
             ctx.io.to(room.id).emit("playerEliminated", { id: socket.id, name: player.name, colorIndex: player.colorIndex });
             
-            setTimeout(() => {
+            safeTimeout('colorrush/handlers/gameplay#1', () => {
               broadcastMatchStatus(room);
             }, 100);
           }

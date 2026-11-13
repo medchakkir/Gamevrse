@@ -28,6 +28,7 @@ import { startRoundNow, beginNextTurn, clearTurnTimer } from "./gameEngine.js";
 import { submitRank } from "./rankingService.js";
 import { handleDisconnect, attemptReconnect } from "./reconnectService.js";
 import { setupAdminRoutes } from "./adminRoutes.js";
+import logger from "../../shared/logger.js";
 
 
 // -------------------------------------------------------------
@@ -68,7 +69,7 @@ const wrappedSubmitRank = (roomId, roundId, ranks) =>
 // Socket.IO Events
 // -------------------------------------------------------------
 const onConnection = socket => {
-  console.log("[connected]", socket.id);
+  logger.debug("[connected]", socket.id);
 
   // -----------------------------------------------------------
   // CREATE ROOM
@@ -446,7 +447,7 @@ const onConnection = socket => {
     
     // Safety check: player must exist in room
     if (!room.players[socket.id]) {
-      console.log(`[toggle_ready] Player ${socket.id} not found in room ${roomId}`);
+      logger.debug(`[toggle_ready] Player ${socket.id} not found in room ${roomId}`);
       return;
     }
 
@@ -578,13 +579,13 @@ const onConnection = socket => {
       const validation = validateCustomQuestions(customQuestions, numRounds);
       
       if (!validation.valid) {
-        console.log(`[start_game] Custom question validation failed`);
+        logger.debug(`[start_game] Custom question validation failed`);
         return socket.emit("start_error", { error: validation.error });
       }
       
       // PART 7: FINAL SAFETY GUARANTEE - All conditions met
       if (room.state !== "lobby" && room.state !== "game_ended") {
-        console.log(`[start_game] Room not in valid state: ${room.state}`);
+        logger.debug(`[start_game] Room not in valid state: ${room.state}`);
         return socket.emit("start_error", { error: "invalid_room_state" });
       }
       
@@ -593,7 +594,7 @@ const onConnection = socket => {
       room.currentRoundIndex = 0;
       room.pendingQuestion = room.questions[0];
       
-      console.log(`[start_game] Custom Mode: ${validation.questions.length} questions validated and loaded`);
+      logger.debug(`[start_game] Custom Mode: ${validation.questions.length} questions validated and loaded`);
     } else {
       // 🎮 NORMAL MODE: Use built-in questions
       // Reject custom questions in Normal Mode

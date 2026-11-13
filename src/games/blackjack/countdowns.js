@@ -2,6 +2,8 @@ Object.assign(module.exports, { checkReadyStart, startReadyCountdown, clearReady
 const { ctx } = require('./state');
 const { NEXT_ROUND_COUNTDOWN_MS, READY_COUNTDOWN_MS, rooms } = require('./state');
 const { startRound } = require('./turns');
+const logger = require('../../shared/logger');
+const { safeTimeout } = require('../../shared/timers');
 
 
 
@@ -17,8 +19,8 @@ function checkReadyStart(roomCode) {
   // 🤖 Debug logging for practice mode
   if (room.isPracticeMode) {
     const readyPlayers = players.filter(p => p.ready);
-    console.log(`[PRACTICE DEBUG] checkReadyStart: ${readyPlayers.length}/${players.length} players ready`);
-    console.log(`[PRACTICE DEBUG] All ready?`, players.every(p => p.ready));
+    logger.debug(`[PRACTICE DEBUG] checkReadyStart: ${readyPlayers.length}/${players.length} players ready`);
+    logger.debug(`[PRACTICE DEBUG] All ready?`, players.every(p => p.ready));
   }
 
   // ✅ THIS IS THE AUTHORITATIVE CONDITION
@@ -27,7 +29,7 @@ function checkReadyStart(roomCode) {
     
     // 🤖 In practice mode, start immediately without countdown
     if (room.isPracticeMode) {
-      console.log('[PRACTICE] All players ready, starting immediately');
+      logger.debug('[PRACTICE] All players ready, starting immediately');
       startRound(roomCode);
     } else {
       startRound(roomCode);
@@ -57,7 +59,7 @@ function startReadyCountdown(roomCode) {
     endsAt: room.readyCountdownEndsAt
   });
 
-  room.readyCountdownTimer = setTimeout(() => {
+  room.readyCountdownTimer = safeTimeout('blackjack/countdowns#1', () => {
     clearReadyCountdown(roomCode);
     startRound(roomCode);
   }, READY_COUNTDOWN_MS);
@@ -85,7 +87,7 @@ function startNextRoundCountdown(roomCode) {
 
   if (room.nextRoundTimer) return;
 
-  console.log(`[NEXT ROUND] Starting countdown for room ${roomCode}`);
+  logger.debug(`[NEXT ROUND] Starting countdown for room ${roomCode}`);
 
   room.nextRoundEndsAt = Date.now() + NEXT_ROUND_COUNTDOWN_MS;
 
@@ -98,12 +100,12 @@ function startNextRoundCountdown(roomCode) {
     endsAt: room.nextRoundEndsAt
   });
 
-  room.nextRoundTimer = setTimeout(() => {
+  room.nextRoundTimer = safeTimeout('blackjack/countdowns#2', () => {
     room.nextRoundTimer = null;
     room.nextRoundEndsAt = null;
 
     if (!room.gameOver) {
-      console.log(`[NEXT ROUND] Starting new round for room ${roomCode}`);
+      logger.debug(`[NEXT ROUND] Starting new round for room ${roomCode}`);
       startRound(roomCode);
     }
   }, NEXT_ROUND_COUNTDOWN_MS);

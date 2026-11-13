@@ -4,6 +4,8 @@ const { checkReadyStart, clearNextRoundCountdown, clearReadyCountdown, startNext
 const { checkVictoryCondition, createRoom, makeToken, reassignHost, resetRoomToLobby, savePlayerToken, updateState } = require('../roomState');
 const { bots, playersByToken, rooms } = require('../state');
 const { nextTurn } = require('../turns');
+const logger = require('../../../shared/logger');
+const { safeTimeout } = require('../../../shared/timers');
 
 function register(socket) {
 
@@ -118,7 +120,7 @@ reassignHost(room);
     const winner = room.players[room.winnerId];
     if (winner) {
       // Send victory event immediately to reconnecting player
-      setTimeout(() => {
+      safeTimeout('blackjack/handlers/lobby#1', () => {
         ctx.io.to(socket.id).emit('victory', {
           winnerId: winner.id,
           winnerName: winner.name
@@ -164,7 +166,7 @@ reassignHost(room);
 
   // Step 5: Check if player is banned from this room
   if (room.bannedPlayers && room.bannedPlayers.has(socket.id)) {
-    console.log(`[JOIN] Blocked banned player ${socket.id} from rejoining room ${cleanCode}`);
+    logger.debug(`[JOIN] Blocked banned player ${socket.id} from rejoining room ${cleanCode}`);
     return socket.emit('roomError', 'You cannot join this room because you were previously removed by the host');
   }
   
@@ -174,7 +176,7 @@ reassignHost(room);
     // We'll check the name after they set it, but for now check IP-only bans
     const ipBans = Array.from(room.bannedIdentities.values()).filter(ban => ban.ip === playerIP);
     if (ipBans.length > 0) {
-      console.log(`[JOIN] Blocked player with banned IP ${playerIP} from rejoining room ${cleanCode}`);
+      logger.debug(`[JOIN] Blocked player with banned IP ${playerIP} from rejoining room ${cleanCode}`);
       return socket.emit('roomError', 'You cannot join this room because you were previously removed by the host');
     }
   }
@@ -205,10 +207,10 @@ reassignHost(room);
     // 🎯 NEW: Inform about spectator status if joining mid-game
     if (shouldBeSpectator) {
       ctx.io.to(cleanCode).emit('log', `👁️ ${room.players[socket.id].name} joined as spectator (game in progress)`);
-      console.log(`[JOIN] ${socket.id} joined room ${cleanCode} as spectator (game active)`);
+      logger.debug(`[JOIN] ${socket.id} joined room ${cleanCode} as spectator (game active)`);
     } else {
       ctx.io.to(cleanCode).emit('log', `🎮 ${room.players[socket.id].name} joined the game`);
-      console.log(`[JOIN] ${socket.id} joined room ${cleanCode} as player (lobby)`);
+      logger.debug(`[JOIN] ${socket.id} joined room ${cleanCode} as player (lobby)`);
     }
 
     ctx.io.to(socket.id).emit('phaseChange', {
@@ -243,11 +245,11 @@ reassignHost(room);
   const wasSpectator = player.spectator === true;
   const wasRoulettePlayer = room.rouletteChoiceActive && room.rouletteChoicePlayer === socket.id;
 
-  console.log(`[LEAVE] ${name} leaving - Spectator: ${wasSpectator}, Roulette player: ${wasRoulettePlayer}`);
+  logger.debug(`[LEAVE] ${name} leaving - Spectator: ${wasSpectator}, Roulette player: ${wasRoulettePlayer}`);
 
   // 🎯 CRITICAL FIX: Handle spectators leaving differently - they shouldn't affect game flow
   if (wasSpectator && !wasRoulettePlayer) {
-    console.log(`[LEAVE] Spectator ${name} leaving - no game impact`);
+    logger.debug(`[LEAVE] Spectator ${name} leaving - no game impact`);
     
     // Simple spectator removal - no game flow changes needed
     delete room.players[socket.id];
@@ -285,7 +287,7 @@ reassignHost(room);
 
   // Handle roulette choice leaving (similar to disconnect)
   if (wasRoulettePlayer) {
-    console.log(`[LEAVE] Clearing roulette choice for leaving player ${name}`);
+    logger.debug(`[LEAVE] Clearing roulette choice for leaving player ${name}`);
     
     // Clear roulette state
     if (room.rouletteChoiceTimer) {
@@ -337,11 +339,11 @@ reassignHost(room);
     
     // If it was a roulette leave, start next round countdown
     if (wasRoulettePlayer && !room.gameOver) {
-      setTimeout(() => {
+      safeTimeout('blackjack/handlers/lobby#2', () => {
         if (rooms[roomCode]) {
           const remainingAlive = Object.values(room.players).filter(p => p.alive && !p.spectator);
           if (remainingAlive.length > 1) {
-            console.log(`[LEAVE] Starting next round countdown after roulette leave`);
+            logger.debug(`[LEAVE] Starting next round countdown after roulette leave`);
             
             // Clean up round state
             Object.values(room.players).forEach(p => {
@@ -389,7 +391,7 @@ reassignHost(room);
       const banKey = `${final.toLowerCase()}|${playerIP}`;
       
       if (room.bannedIdentities && room.bannedIdentities.has(banKey)) {
-        console.log(`[SETNAME] Blocked banned identity ${banKey} from setting name in room ${socket.data.roomCode}`);
+        logger.debug(`[SETNAME] Blocked banned identity ${banKey} from setting name in room ${socket.data.roomCode}`);
         
         const roomCode = socket.data.roomCode; // Store before clearing
         
@@ -445,8 +447,8 @@ socket.on('toggleReady', () => {
   if (room.isPracticeMode) {
     const allPlayers = Object.values(room.players).filter(p => p.alive && !p.spectator);
     const readyPlayers = allPlayers.filter(p => p.ready);
-    console.log(`[PRACTICE DEBUG] ${readyPlayers.length}/${allPlayers.length} players ready`);
-    console.log(`[PRACTICE DEBUG] Players:`, allPlayers.map(p => `${p.name}(${p.isBot ? 'bot' : 'human'}): ${p.ready}`));
+    logger.debug(`[PRACTICE DEBUG] ${readyPlayers.length}/${allPlayers.length} players ready`);
+    logger.debug(`[PRACTICE DEBUG] Players:`, allPlayers.map(p => `${p.name}(${p.isBot ? 'bot' : 'human'}): ${p.ready}`));
   }
 
   // 🔴 IMPORTANT LOGIC
@@ -479,7 +481,7 @@ socket.on('toggleReady', () => {
     // 🎯 NEW: Set elimination mode for practice room
     rooms[code].rules.eliminationMode = eliminationMode || 'standard';
     
-    console.log(`[PRACTICE] Creating practice room with elimination mode: ${eliminationMode || 'standard'}`);
+    logger.debug(`[PRACTICE] Creating practice room with elimination mode: ${eliminationMode || 'standard'}`);
     
     socket.join(code);
     socket.data.roomCode = code;
@@ -510,7 +512,7 @@ socket.on('toggleReady', () => {
       rooms[code].players[bot.id] = bot;
     }
 
-    console.log(`[PRACTICE] Created practice room ${code} with ${botCount} ${difficulty} bots (all ready)`);
+    logger.info(`[PRACTICE] Created practice room ${code} with ${botCount} ${difficulty} bots (all ready)`);
 
     // Assign token for reconnection
     const token = makeToken();
@@ -568,7 +570,7 @@ socket.on('toggleReady', () => {
     p.ready = false;
     
     ctx.io.to(roomCode).emit('log', `🎮 ${p.name} will join the next game`);
-    console.log(`[JOIN NEXT] ${p.name} converted from spectator to player`);
+    logger.debug(`[JOIN NEXT] ${p.name} converted from spectator to player`);
     
     if (socket.data.token) {
       savePlayerToken(socket, socket.data.token);

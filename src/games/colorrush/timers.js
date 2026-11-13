@@ -4,6 +4,7 @@ const { broadcastMatchStatus } = require('./lobby');
 const { endGame, transitionToRoundEndPhase } = require('./rounds');
 const { ROUND_DURATION_MS, TIMER_UPDATE_INTERVAL, log } = require('./state');
 const { resolveSuddenDeathRound } = require('./suddenDeath');
+const { safeInterval, safeTimeout } = require('../../shared/timers');
 
 
 // ---------- CENTRALIZED TIMER MANAGEMENT ----------
@@ -97,12 +98,12 @@ function startRoundTimer(room) {
   room.freezeRemaining = 0;
   
   // Start timer update interval
-  room.timerInterval = setInterval(() => {
+  room.timerInterval = safeInterval('colorrush/timers#1', () => {
     updateRoundTimer(room);
   }, TIMER_UPDATE_INTERVAL);
   
   // Set timeout for round end
-  room.roundTimeout = setTimeout(() => {
+  room.roundTimeout = safeTimeout('colorrush/timers#2', () => {
     handleRoundTimeout(room);
   }, ROUND_DURATION_MS);
   
@@ -287,7 +288,7 @@ function handlePlayerTimeout(room, playerId) {
       // Still emit playerEliminated to update scoreboard for other players
       ctx.io.to(playerId).emit("playerEliminated", { id: playerId, name: player.name, colorIndex: player.colorIndex });
       
-      setTimeout(() => {
+      safeTimeout('colorrush/timers#3', () => {
         broadcastMatchStatus(room);
       }, 100);
     }

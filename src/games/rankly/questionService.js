@@ -7,6 +7,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { BUILT_IN_QUESTIONS } from "./config.js";
 import { shuffle } from "./utils.js";
+import logger from "../../shared/logger.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -112,19 +113,19 @@ export function prepareRoomQuestions(room, numRounds) {
 export function validateCustomQuestions(customQuestions, numRounds) {
   // Step 1: Validate array structure and basic safety
   if (!Array.isArray(customQuestions)) {
-    console.log(`[start_game] Invalid customQuestions: not an array`);
+    logger.debug(`[start_game] Invalid customQuestions: not an array`);
     return { valid: false, error: "invalid_custom_questions" };
   }
   
   // Step 2: Validate exact count (CASE 1, 6, 7, 8)
   if (customQuestions.length !== numRounds) {
-    console.log(`[start_game] Question count mismatch: ${customQuestions.length} !== ${numRounds}`);
+    logger.debug(`[start_game] Question count mismatch: ${customQuestions.length} !== ${numRounds}`);
     return { valid: false, error: "invalid_custom_questions" };
   }
   
   // PART 4: Additional safety checks
   if (numRounds <= 0 || numRounds > 20) {
-    console.log(`[start_game] Invalid numRounds: ${numRounds}`);
+    logger.debug(`[start_game] Invalid numRounds: ${numRounds}`);
     return { valid: false, error: "invalid_custom_questions" };
   }
   
@@ -137,7 +138,7 @@ export function validateCustomQuestions(customQuestions, numRounds) {
     
     // Type check - CRITICAL security
     if (typeof q !== 'string') {
-      console.log(`[start_game] Question ${i} is not a string: ${typeof q}`);
+      logger.debug(`[start_game] Question ${i} is not a string: ${typeof q}`);
       return { valid: false, error: "invalid_custom_questions" };
     }
     
@@ -146,25 +147,25 @@ export function validateCustomQuestions(customQuestions, numRounds) {
     
     // Length validation (5-120 characters)
     if (clean.length < 5) {
-      console.log(`[start_game] Question ${i} too short: ${clean.length} chars`);
+      logger.debug(`[start_game] Question ${i} too short: ${clean.length} chars`);
       return { valid: false, error: "invalid_custom_questions" };
     }
     
     if (clean.length > 120) {
-      console.log(`[start_game] Question ${i} too long: ${clean.length} chars`);
+      logger.debug(`[start_game] Question ${i} too long: ${clean.length} chars`);
       return { valid: false, error: "invalid_custom_questions" };
     }
     
     // Content validation - reject if only punctuation
     if (/^[^\w\s]*$/.test(clean)) {
-      console.log(`[start_game] Question ${i} is only punctuation: "${clean}"`);
+      logger.debug(`[start_game] Question ${i} is only punctuation: "${clean}"`);
       return { valid: false, error: "invalid_custom_questions" };
     }
     
     // Duplicate check (case-insensitive)
     const normalized = clean.toLowerCase();
     if (seenQuestions.has(normalized)) {
-      console.log(`[start_game] Duplicate question detected: "${clean}"`);
+      logger.debug(`[start_game] Duplicate question detected: "${clean}"`);
       return { valid: false, error: "invalid_custom_questions" };
     }
     
@@ -186,7 +187,7 @@ export function validateCustomQuestions(customQuestions, numRounds) {
   
   // Final safety check - PART 5: SERVER STATE SAFETY
   if (validatedQuestions.length !== numRounds) {
-    console.log(`[start_game] Final validation failed: ${validatedQuestions.length} !== ${numRounds}`);
+    logger.debug(`[start_game] Final validation failed: ${validatedQuestions.length} !== ${numRounds}`);
     return { valid: false, error: "invalid_custom_questions" };
   }
   

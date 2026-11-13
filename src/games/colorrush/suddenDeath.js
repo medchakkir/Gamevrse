@@ -4,6 +4,7 @@ const { clearGameCountdown, generateSequence } = require('./lobby');
 const { endGame } = require('./rounds');
 const { PHASE_GET_READY, PHASE_PLAY, PHASE_SEQUENCE, log } = require('./state');
 const { clearPhaseTimers, clearRoundTimer, safeEndGame, updateRoundTimer } = require('./timers');
+const { safeInterval, safeTimeout } = require('../../shared/timers');
 
 
 // ========== NEW SUDDEN DEATH SYSTEM (OPTION 1: FIXED-LENGTH) ==========
@@ -98,7 +99,7 @@ function startSuddenDeathRound(room) {
   log(`[sudden-death] Round started with ${room.suddenDeathLength}-tile sequence - PHASE 1: GET_READY`);
   
   // Auto-advance to SEQUENCE phase after 3 seconds
-  room.getReadyTimeout = setTimeout(() => {
+  room.getReadyTimeout = safeTimeout('colorrush/suddenDeath#1', () => {
     // Check if this is still the current round
     if (room.suddenDeathRoundId !== currentRoundId) {
       log(`[sudden-death] GET_READY timeout fired for old round ${currentRoundId}, ignoring (current: ${room.suddenDeathRoundId})`);
@@ -120,7 +121,7 @@ function startSuddenDeathRound(room) {
     
     // Set timeout for sequence phase (in case players don't respond)
     const sequenceTimeout = 5000 + (room.sequence.length * 1000);
-    room.sequenceTimeout = setTimeout(() => {
+    room.sequenceTimeout = safeTimeout('colorrush/suddenDeath#2', () => {
       // Check if this is still the current round
       if (room.suddenDeathRoundId !== currentRoundId) {
         log(`[sudden-death] SEQUENCE timeout fired for old round ${currentRoundId}, ignoring (current: ${room.suddenDeathRoundId})`);
@@ -174,7 +175,7 @@ function enterSuddenDeathPlayPhase(room, expectedRoundId) {
   log(`[sudden-death] PHASE 3: PLAY - 20s timer started`);
   
   // Start timer interval for updates (every 100ms)
-  room.timerInterval = setInterval(() => {
+  room.timerInterval = safeInterval('colorrush/suddenDeath#3', () => {
     if (!room.isSuddenDeath || room.gameEnding) {
       clearInterval(room.timerInterval);
       return;
@@ -183,7 +184,7 @@ function enterSuddenDeathPlayPhase(room, expectedRoundId) {
   }, 100);
   
   // Set round timer (20 seconds for sudden death)
-  room.roundTimer = setTimeout(() => {
+  room.roundTimer = safeTimeout('colorrush/suddenDeath#4', () => {
     // Check if this is still the current round
     if (room.suddenDeathRoundId !== currentRoundId) {
       log(`[sudden-death] Timer fired for old round ${currentRoundId}, ignoring (current: ${room.suddenDeathRoundId})`);
@@ -305,7 +306,7 @@ function resolveSuddenDeathRound(room) {
   // CASE 1: Exactly one survivor - WINNER!
   if (survivors.length === 1) {
     log(`[sudden-death] ⭐ WINNER: ${survivors[0].name}`);
-    setTimeout(() => {
+    safeTimeout('colorrush/suddenDeath#5', () => {
       endSuddenDeath(room, survivors[0].id);
     }, 1500);
     return;
@@ -325,7 +326,7 @@ function resolveSuddenDeathRound(room) {
       }
     }
     
-    setTimeout(() => {
+    safeTimeout('colorrush/suddenDeath#6', () => {
       if (room.isSuddenDeath && !room.gameEnding) {
         clearRoundTimer(room);
         if (room.sequenceTimeout) clearTimeout(room.sequenceTimeout);
@@ -344,7 +345,7 @@ function resolveSuddenDeathRound(room) {
   // CRITICAL: Keep tiePlayers same as frozen list for restart
   room.tiePlayers = [...room.suddenDeathPlayers];
   
-  setTimeout(() => {
+  safeTimeout('colorrush/suddenDeath#7', () => {
     if (room.isSuddenDeath && !room.gameEnding) {
       clearRoundTimer(room);
       if (room.sequenceTimeout) clearTimeout(room.sequenceTimeout);
@@ -511,7 +512,7 @@ function handleTieBreakerSubmission(room, playerId, inputSequence, timeTaken) {
     }
     
     // Brief delay then start next round
-    setTimeout(() => {
+    safeTimeout('colorrush/suddenDeath#8', () => {
       // Double-check we're not ending before starting next round
       if (!room.gameEnding) {
         startTieBreakerRound(room);

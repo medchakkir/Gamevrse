@@ -5,6 +5,7 @@ const { resetSecondChanceRoundState } = require('./powerups');
 const { PHASE_GET_READY, PHASE_PLAY, PHASE_ROUND_END, PHASE_SEQUENCE, READY_TIMEOUT_MS, ROUND_DURATION_MS, log, playerFreezeTimeouts } = require('./state');
 const { resolveSuddenDeathRound, startSuddenDeathRound } = require('./suddenDeath');
 const { clearRoundTimer, safeEndGame, startRoundTimer } = require('./timers');
+const { safeTimeout } = require('../../shared/timers');
 
 
 // Get disconnect phase category for decision making
@@ -115,7 +116,7 @@ function startNextRound(room) {
   broadcastMatchStatus(room);
   
   // Auto-advance to SEQUENCE after 5 seconds OR when all players ready
-  room.getReadyTimeout = setTimeout(() => {
+  room.getReadyTimeout = safeTimeout('colorrush/rounds#1', () => {
     if (room.gameEnding) return;
     
     // CRITICAL: Re-check player count before advancing
@@ -161,7 +162,7 @@ function transitionToSequencePhase(room) {
   
   log(`[${room.id}] SEQUENCE timeout set for ${maxDuration}ms`);
   
-  room.sequenceTimeout = setTimeout(() => {
+  room.sequenceTimeout = safeTimeout('colorrush/rounds#2', () => {
     if (room.gameEnding) return;
     
     if (room.currentPhase === PHASE_SEQUENCE) {
@@ -275,7 +276,7 @@ function transitionToRoundEndPhase(room) {
   });
   
   // Short delay before next round or game end
-  setTimeout(() => {
+  safeTimeout('colorrush/rounds#3', () => {
     if (room.gameEnding) return;
     
     // CRITICAL: Re-check player count (disconnect may have happened during delay)
@@ -329,7 +330,7 @@ function transitionToRoundEndPhase(room) {
         player.pendingElimination = false;
       });
       
-      setTimeout(() => {
+      safeTimeout('colorrush/rounds#4', () => {
         broadcastMatchStatus(room);
       }, 100);
       
@@ -600,7 +601,7 @@ function waitForReadies(room) {
 
   ctx.io.to(room.id).emit("prepareNextRound");
 
-  room.readyTimer = setTimeout(() => {
+  room.readyTimer = safeTimeout('colorrush/rounds#5', () => {
     if (room.gameEnding) return;
     
     // CRITICAL: Re-check player count before starting next round
@@ -678,7 +679,7 @@ function endGame(room, winnerId) {
   }
 
   // Return to lobby after 15 seconds (increased for victory screen)
-  setTimeout(() => {
+  safeTimeout('colorrush/rounds#6', () => {
     // STEP 7: RESET FLAG BEFORE PHASE CHANGE
     room.gameEnding = false;
     

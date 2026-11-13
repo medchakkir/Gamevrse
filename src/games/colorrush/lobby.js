@@ -4,6 +4,7 @@ const { resetSecondChanceForNewMatch } = require('./powerups');
 const { startNextRound, waitForReadies } = require('./rounds');
 const { COLORS, log } = require('./state');
 const { cleanupTimerState, clearPhaseTimers, safeEndGame } = require('./timers');
+const { safeTimeout } = require('../../shared/timers');
 
 
 // Utility: Check if only one player remains and end game
@@ -131,7 +132,7 @@ function startGameCountdown(room) {
   const COUNTDOWN_DURATION = 30000; // 30 seconds
   room.startCountdownEndsAt = Date.now() + COUNTDOWN_DURATION;
   
-  room.startCountdownTimer = setTimeout(() => {
+  room.startCountdownTimer = safeTimeout('colorrush/lobby#1', () => {
     // Auto-start game when countdown reaches 0
     if (room.phase === 'lobby' && Object.keys(room.players).length >= 2) {
       actuallyStartGame(room);

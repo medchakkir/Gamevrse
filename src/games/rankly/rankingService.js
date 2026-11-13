@@ -5,6 +5,9 @@
 import { JUDGE_BONUS_POINTS, ROUND_PHASES, ROOM_STATES } from "./config.js";
 import { countConnectedPlayers, resetAllPlayersReadyState, broadcastRoom } from "./roomManager.js";
 import { clearRankingTimer } from "./gameEngine.js";
+import logger from "../../shared/logger.js";
+import timers from "../../shared/timers.js";
+const { safeInterval, safeTimeout } = timers;
 
 // ✅ FIX 2: Helper to clear auto-return timer
 export function clearAutoReturnTimer(room) {
@@ -17,7 +20,7 @@ export function clearAutoReturnTimer(room) {
 export function submitRank(roomId, roundId, ranks, rooms, io, startRoundNow, autoRank = false) {
   const room = rooms[roomId];
   if (!room || !room.round) {
-    console.log(`[submitRank] No room or round found`);
+    logger.debug(`[submitRank] No room or round found`);
     return;
   }
   
@@ -25,19 +28,19 @@ export function submitRank(roomId, roundId, ranks, rooms, io, startRoundNow, aut
   
   // Verify round ID matches
   if (round.id !== roundId) {
-    console.log(`[submitRank] Round ID mismatch: ${roundId} vs ${round.id}`);
+    logger.debug(`[submitRank] Round ID mismatch: ${roundId} vs ${round.id}`);
     return;
   }
   
   // ✅ PHASE VALIDATION: Must be in ranking phase
   if (round.phase !== ROUND_PHASES.RANKING) {
-    console.log(`[submitRank] Wrong phase: ${round.phase}, expected ${ROUND_PHASES.RANKING}`);
+    logger.debug(`[submitRank] Wrong phase: ${round.phase}, expected ${ROUND_PHASES.RANKING}`);
     return;
   }
 
   // ✅ FIX 3: Prevent late submissions after ranking closed (but allow auto-ranking)
   if (round.rankingClosed && !autoRank) {
-    console.log(`[submitRank] Ranking already closed, rejecting late submission`);
+    logger.debug(`[submitRank] Ranking already closed, rejecting late submission`);
     return;
   }
   
@@ -46,7 +49,7 @@ export function submitRank(roomId, roundId, ranks, rooms, io, startRoundNow, aut
   
   // Validate ranks is an array
   if (!Array.isArray(ranks)) {
-    console.log(`[submitRank] Ranks must be an array`);
+    logger.debug(`[submitRank] Ranks must be an array`);
     return;
   }
   
@@ -58,14 +61,14 @@ export function submitRank(roomId, roundId, ranks, rooms, io, startRoundNow, aut
 
   // EDGE CASE: All players timed out - no ranking needed
   if (validAnswers.length === 0) {
-    console.log(`[submitRank] All players timed out - skipping ranking`);
+    logger.debug(`[submitRank] All players timed out - skipping ranking`);
     processAllTimedOut(room, roomId, timedOutAnswers, rooms, io, startRoundNow);
     return;
   }
 
   // ✅ STRICT VALIDATION: Rank count must match valid answers count
   if (ranks.length !== validAnswers.length) {
-    console.log(`[submitRank] Rank count mismatch: ${ranks.length} vs ${validAnswers.length}`);
+    logger.debug(`[submitRank] Rank count mismatch: ${ranks.length} vs ${validAnswers.length}`);
     return;
   }
 
@@ -73,7 +76,7 @@ export function submitRank(roomId, roundId, ranks, rooms, io, startRoundNow, aut
   for (const r of ranks) {
     const isValid = validAnswers.some(a => a.id === r.answerId);
     if (!isValid) {
-      console.log(`[submitRank] Invalid answerId detected: ${r.answerId}`);
+      logger.debug(`[submitRank] Invalid answerId detected: ${r.answerId}`);
       return;
     }
   }
@@ -82,7 +85,7 @@ export function submitRank(roomId, roundId, ranks, rooms, io, startRoundNow, aut
   const rankValues = ranks.map(r => r.rank).sort((a, b) => a - b);
   for (let i = 0; i < rankValues.length; i++) {
     if (rankValues[i] !== i + 1) {
-      console.log(`[submitRank] Invalid rank sequence: expected ${i + 1}, got ${rankValues[i]}`);
+      logger.debug(`[submitRank] Invalid rank sequence: expected ${i + 1}, got ${rankValues[i]}`);
       return;
     }
   }
@@ -91,7 +94,7 @@ export function submitRank(roomId, roundId, ranks, rooms, io, startRoundNow, aut
   const used = new Set();
   for (const r of ranks) {
     if (used.has(r.rank)) {
-      console.log(`[submitRank] Duplicate rank detected: ${r.rank}`);
+      logger.debug(`[submitRank] Duplicate rank detected: ${r.rank}`);
       return;
     }
     used.add(r.rank);
@@ -100,7 +103,7 @@ export function submitRank(roomId, roundId, ranks, rooms, io, startRoundNow, aut
   // ✅ STRICT VALIDATION: Rank values must be in range 1..N
   for (const r of ranks) {
     if (r.rank < 1 || r.rank > validAnswers.length) {
-      console.log(`[submitRank] Rank out of range: ${r.rank} (valid: 1-${validAnswers.length})`);
+      logger.debug(`[submitRank] Rank out of range: ${r.rank} (valid: 1-${validAnswers.length})`);
       return;
     }
   }
@@ -109,7 +112,7 @@ export function submitRank(roomId, roundId, ranks, rooms, io, startRoundNow, aut
   round.phase = ROUND_PHASES.RESULTS;
   round._phaseStartedAt = Date.now();
   
-  console.log(`[submitRank] Round ${round.id} → RESULTS phase`);
+  logger.debug(`[submitRank] Round ${round.id} → RESULTS phase`);
 
   // SCORING: Only score valid answers
   for (const r of ranks) {
@@ -187,14 +190,14 @@ export function submitRank(roomId, roundId, ranks, rooms, io, startRoundNow, aut
   // Check if only 2 players remain (judge + 1 answerer) - auto-end game
   const connectedCount = countConnectedPlayers(room);
   if (connectedCount <= 2) {
-    console.log(`[submitRank] Only ${connectedCount} players remaining - ending game`);
+    logger.debug(`[submitRank] Only ${connectedCount} players remaining - ending game`);
     
     room.state = ROOM_STATES.LOBBY;
     room.currentRoundIndex = 0;
     room.pendingQuestion = null;
 
     // Wait 3 seconds to show results, then return to lobby
-    setTimeout(() => {
+    safeTimeout('rankly/rankingService#1', () => {
       io.to(roomId).emit("game_ended_due_to_low_players", {
         reason: "Not enough players to continue",
         leaderboard: room.leaderboard
@@ -222,7 +225,7 @@ export function submitRank(roomId, roundId, ranks, rooms, io, startRoundNow, aut
 
     // Start 30-second auto-return timer
     let countdown = 30;
-    const autoReturnInterval = setInterval(() => {
+    const autoReturnInterval = safeInterval('rankly/rankingService#2', () => {
       countdown--;
       io.to(roomId).emit("auto_return_countdown", { seconds: countdown });
       
@@ -295,13 +298,13 @@ function processAllTimedOut(room, roomId, timedOutAnswers, rooms, io, startRound
   // Check if only 2 players remain
   const connectedCount = countConnectedPlayers(room);
   if (connectedCount <= 2) {
-    console.log(`[processAllTimedOut] Only ${connectedCount} players remaining - ending game`);
+    logger.debug(`[processAllTimedOut] Only ${connectedCount} players remaining - ending game`);
     
     room.state = ROOM_STATES.LOBBY;
     room.currentRoundIndex = 0;
     room.pendingQuestion = null;
 
-    setTimeout(() => {
+    safeTimeout('rankly/rankingService#3', () => {
       io.to(roomId).emit("game_ended_due_to_low_players", {
         reason: "Not enough players to continue",
         leaderboard: room.leaderboard
@@ -346,7 +349,7 @@ function startBetweenRoundsTimer(room, roomId, io, startRoundNow) {
   room._betweenRoundsStartedAt = Date.now();
   room._betweenRoundsDuration = 15000; // 15 seconds
   
-  const nextRoundInterval = setInterval(() => {
+  const nextRoundInterval = safeInterval('rankly/rankingService#4', () => {
     countdown--;
     io.to(roomId).emit("next_round_countdown", { seconds: countdown });
     
@@ -358,7 +361,7 @@ function startBetweenRoundsTimer(room, roomId, io, startRoundNow) {
       
       // Auto-start next round
       if (room.state === ROOM_STATES.BETWEEN_ROUNDS && room.currentRoundIndex < room.questions.length) {
-        console.log(`[auto-advance] Starting round ${room.currentRoundIndex + 1} automatically`);
+        logger.debug(`[auto-advance] Starting round ${room.currentRoundIndex + 1} automatically`);
         startRoundNow(roomId);
       }
     }

@@ -3,6 +3,7 @@ const { activateFreeze, activateSecondChance } = require('../powerups');
 const { PHASE_PLAY, TIMER_UPDATE_INTERVAL, log, playerRoom } = require('../state');
 const { handleRoundTimeout, updateRoundTimer } = require('../timers');
 const { getRoom } = require('../rooms');
+const { safeInterval, safeTimeout } = require('../../../shared/timers');
 
 function register(socket) {
 
@@ -43,12 +44,12 @@ function register(socket) {
     room.freezeActive = false;
     
     // Restart timer interval
-    room.timerInterval = setInterval(() => {
+    room.timerInterval = safeInterval('colorrush/handlers/powerups#1', () => {
       updateRoundTimer(room);
     }, TIMER_UPDATE_INTERVAL);
     
     // Restart round timeout with remaining time
-    room.roundTimeout = setTimeout(() => {
+    room.roundTimeout = safeTimeout('colorrush/handlers/powerups#2', () => {
       handleRoundTimeout(room);
     }, room.secondChanceRemainingTime);
     

@@ -4,6 +4,7 @@
 
 import { shuffle } from "./utils.js";
 import { ROUND_PHASES, ROOM_STATES, RANKING_TIME } from "./config.js";
+import logger from "../../shared/logger.js";
 
 export function pickJudge(room) {
   const playerIds = Object.keys(room.players);
@@ -161,12 +162,12 @@ export function buildRoomSnapshot(room, socketId) {
     
     // PHASE: RANKING
     if (round.phase === ROUND_PHASES.RANKING) {
-      console.log(`[buildRoomSnapshot] ===== RANKING PHASE DEBUG =====`);
-      console.log(`[buildRoomSnapshot] socketId: ${socketId}`);
-      console.log(`[buildRoomSnapshot] judgeSocketId: ${room.judgeSocketId}`);
-      console.log(`[buildRoomSnapshot] isJudge: ${isJudge}`);
-      console.log(`[buildRoomSnapshot] round.answers length: ${round.answers?.length}`);
-      console.log(`[buildRoomSnapshot] =====================================`);
+      logger.debug(`[buildRoomSnapshot] ===== RANKING PHASE DEBUG =====`);
+      logger.debug(`[buildRoomSnapshot] socketId: ${socketId}`);
+      logger.debug(`[buildRoomSnapshot] judgeSocketId: ${room.judgeSocketId}`);
+      logger.debug(`[buildRoomSnapshot] isJudge: ${isJudge}`);
+      logger.debug(`[buildRoomSnapshot] round.answers length: ${round.answers?.length}`);
+      logger.debug(`[buildRoomSnapshot] =====================================`);
       
       // Include answers for judge to rank
       if (isJudge) {
@@ -175,9 +176,9 @@ export function buildRoomSnapshot(room, socketId) {
           text: a.text,
           timedOut: a.timedOut || false
         }));
-        console.log(`[buildRoomSnapshot] ✅ Added answersForRanking for judge: ${snapshot.inRoundData.answersForRanking.length} answers`);
+        logger.debug(`[buildRoomSnapshot] ✅ Added answersForRanking for judge: ${snapshot.inRoundData.answersForRanking.length} answers`);
       } else {
-        console.log(`[buildRoomSnapshot] ❌ Not adding answersForRanking - player is not judge`);
+        logger.debug(`[buildRoomSnapshot] ❌ Not adding answersForRanking - player is not judge`);
       }
       
       // Include remaining ranking time for all players

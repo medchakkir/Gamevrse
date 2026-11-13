@@ -6,6 +6,9 @@ import { nanoid } from "nanoid";
 import { shuffle } from "./utils.js";
 import { pickJudge, countConnectedPlayers, resetAllPlayersReadyState, broadcastRoom, reassignJudge } from "./roomManager.js";
 import { ROUND_PHASES, ROOM_STATES, RANKING_TIME } from "./config.js";
+import logger from "../../shared/logger.js";
+import timers from "../../shared/timers.js";
+const { safeTimeout } = timers;
 
 export function clearTurnTimer(room) {
   if (room._turnTimer) {
@@ -39,7 +42,7 @@ export function startRoundNow(roomId, rooms, io, beginNextTurn) {
 
   // Only allow starting from specific states
   if (![ROOM_STATES.LOBBY, ROOM_STATES.STARTING, ROOM_STATES.BETWEEN_ROUNDS].includes(room.state)) {
-    console.log(`[startRoundNow] Cannot start from state: ${room.state}`);
+    logger.debug(`[startRoundNow] Cannot start from state: ${room.state}`);
     return;
   }
 
@@ -54,7 +57,7 @@ export function startRoundNow(roomId, rooms, io, beginNextTurn) {
   const questionObj = room.pendingQuestion || room.questions[idx];
 
   if (!questionObj || !questionObj.text) {
-    console.log("[startRoundNow] No valid question object found");
+    logger.debug("[startRoundNow] No valid question object found");
     room.state = ROOM_STATES.LOBBY;
     room.round = null;
     room.currentRoundIndex = 0;
@@ -119,7 +122,7 @@ export function beginNextTurn(roomId, rooms, io) {
 
   // Verify we're in answering phase
   if (round.phase !== ROUND_PHASES.ANSWERING) {
-    console.log(`[beginNextTurn] Wrong phase: ${round.phase}, expected ${ROUND_PHASES.ANSWERING}`);
+    logger.debug(`[beginNextTurn] Wrong phase: ${round.phase}, expected ${ROUND_PHASES.ANSWERING}`);
     return;
   }
 
@@ -136,7 +139,7 @@ export function beginNextTurn(roomId, rooms, io) {
   
   // Safety: Check if player still exists and is connected
   if (!room.players[sid] || !room.players[sid].connected) {
-    console.log(`[beginNextTurn] Player ${sid} no longer exists or disconnected, skipping their turn`);
+    logger.debug(`[beginNextTurn] Player ${sid} no longer exists or disconnected, skipping their turn`);
     
     // Add a "No Answer" entry for the disconnected player so we can move forward
     round.answers.push({
@@ -168,7 +171,7 @@ export function beginNextTurn(roomId, rooms, io) {
   room._turnStartedAt = Date.now();
 
   // Auto-timeout
-  room._turnTimer = setTimeout(() => {
+  room._turnTimer = safeTimeout('rankly/gameEngine#1', () => {
     io.to(sid).emit("time_up");
     
     // Player ran out of time
@@ -192,7 +195,7 @@ function transitionToRanking(roomId, rooms, io) {
   
   // Verify current phase
   if (round.phase !== ROUND_PHASES.ANSWERING) {
-    console.log(`[transitionToRanking] Wrong phase: ${round.phase}`);
+    logger.debug(`[transitionToRanking] Wrong phase: ${round.phase}`);
     return;
   }
 
@@ -201,24 +204,24 @@ function transitionToRanking(roomId, rooms, io) {
   const judgeExists = room.judgeSocketId && room.players[room.judgeSocketId] && room.players[room.judgeSocketId].connected;
   
   if (!judgeExists) {
-    console.log(`[transitionToRanking] Judge disconnected - attempting reassignment`);
+    logger.debug(`[transitionToRanking] Judge disconnected - attempting reassignment`);
     
     // Try to reassign judge
     const newJudge = reassignJudge(room, roomId, io);
     
     if (!newJudge) {
       // No one available to judge - skip this round
-      console.log(`[transitionToRanking] No judge available - skipping round`);
+      logger.debug(`[transitionToRanking] No judge available - skipping round`);
       skipRound(roomId, rooms, io, "Judge disconnected before ranking");
       return;
     }
     
-    console.log(`[transitionToRanking] New judge assigned: ${newJudge}`);
+    logger.debug(`[transitionToRanking] New judge assigned: ${newJudge}`);
   }
   
   // Check minimum players
   if (connectedCount < 3) {
-    console.log(`[transitionToRanking] Not enough players (${connectedCount}) - ending game`);
+    logger.debug(`[transitionToRanking] Not enough players (${connectedCount}) - ending game`);
     endGameDueToLowPlayers(roomId, rooms, io, "Not enough players to continue");
     return;
   }
@@ -227,12 +230,12 @@ function transitionToRanking(roomId, rooms, io) {
   round.phase = ROUND_PHASES.RANKING;
   round._phaseStartedAt = Date.now();
 
-  console.log(`[transitionToRanking] Round ${round.id} → RANKING phase`);
+  logger.debug(`[transitionToRanking] Round ${round.id} → RANKING phase`);
 
   // ✅ START RANKING TIMER (60 seconds)
   room._rankingStartedAt = Date.now();
-  room._rankingTimer = setTimeout(() => {
-    console.log(`[ranking timeout] Judge did not rank in time - auto-ranking randomly`);
+  room._rankingTimer = safeTimeout('rankly/gameEngine#2', () => {
+    logger.debug(`[ranking timeout] Judge did not rank in time - auto-ranking randomly`);
     autoRankAnswers(roomId, rooms, io);
   }, RANKING_TIME);
 
@@ -256,7 +259,7 @@ export function autoRankAnswers(roomId, rooms, io) {
   
   // Verify we're still in ranking phase
   if (round.phase !== ROUND_PHASES.RANKING) {
-    console.log(`[autoRankAnswers] Wrong phase: ${round.phase}`);
+    logger.debug(`[autoRankAnswers] Wrong phase: ${round.phase}`);
     return;
   }
 
@@ -266,7 +269,7 @@ export function autoRankAnswers(roomId, rooms, io) {
   const validAnswers = round.answers.filter(a => !a.timedOut);
   
   if (validAnswers.length === 0) {
-    console.log(`[autoRankAnswers] No valid answers to rank`);
+    logger.debug(`[autoRankAnswers] No valid answers to rank`);
     // ✅ Mark as closed even if no valid answers
     round.rankingClosed = true;
     return;
@@ -281,7 +284,7 @@ export function autoRankAnswers(roomId, rooms, io) {
     rank: index + 1
   }));
 
-  console.log(`[autoRankAnswers] Auto-ranked ${randomRanks.length} answers randomly`);
+  logger.debug(`[autoRankAnswers] Auto-ranked ${randomRanks.length} answers randomly`);
 
   // ✅ FIX 3: Mark ranking as closed BEFORE calling submitRank
   // This prevents manual submissions but we'll allow this auto-submission

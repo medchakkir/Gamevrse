@@ -6,6 +6,7 @@ const { log, playerRoom } = require('./state');
 const { endSuddenDeath } = require('./suddenDeath');
 const { clearAllRoomTimers, clearPhaseTimers, clearRoundTimer, safeEndGame } = require('./timers');
 const { removeRoom } = require('./rooms');
+const logger = require('../../shared/logger');
 
 // ============================================================================
 // CENTRALIZED DISCONNECT SYSTEM - PRODUCTION GRADE
@@ -204,7 +205,7 @@ function executeDisconnectDecision(room, roomId, decision, disconnectedId, playe
     case 'DELETE_ROOM':
       clearAllRoomTimers(room);
       removeRoom(roomId);
-      log(`[DISCONNECT] Room deleted`);
+      logger.info(`[DISCONNECT] Room deleted`);
       break;
       
     case 'CANCEL_COUNTDOWN':

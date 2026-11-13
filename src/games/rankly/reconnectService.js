@@ -5,6 +5,9 @@
 import { DISCONNECT_GRACE_PERIOD, ROUND_PHASES, ROOM_STATES, RANKING_TIME } from "./config.js";
 import { promoteNewHost, reassignJudge, countConnectedPlayers, resetAllPlayersReadyState, broadcastRoom } from "./roomManager.js";
 import { clearTurnTimer, clearRankingTimer } from "./gameEngine.js";
+import logger from "../../shared/logger.js";
+import timers from "../../shared/timers.js";
+const { safeInterval, safeTimeout } = timers;
 
 // ✅ PURE STATE RESTORATION: No lifecycle transitions during reconnect
 export function attemptReconnect(socket, roomId, playerToken, rooms, io, buildRoomSnapshot) {
@@ -39,10 +42,10 @@ export function attemptReconnect(socket, roomId, playerToken, rooms, io, buildRo
   // If player is marked as connected but with different socket ID,
   // it means disconnect hasn't been processed yet - allow reconnection
   if (reconnectingPlayer.connected && oldSocketId !== socket.id) {
-    console.log(`[reconnect] Player ${reconnectingPlayer.name} reconnecting before disconnect processed - allowing`);
+    logger.debug(`[reconnect] Player ${reconnectingPlayer.name} reconnecting before disconnect processed - allowing`);
   }
   
-  console.log(`[reconnect] ${reconnectingPlayer.name} reconnecting to room ${roomId}`);
+  logger.debug(`[reconnect] ${reconnectingPlayer.name} reconnecting to room ${roomId}`);
   
   // Clear grace timer
   if (reconnectingPlayer._graceTimer) {
@@ -144,17 +147,17 @@ export function attemptReconnect(socket, roomId, playerToken, rooms, io, buildRo
   
   // ✅ Send phase-aware state snapshot for UI rehydration
   const snapshot = buildRoomSnapshot(room, socket.id);
-  console.log(`[reconnect] ===== SENDING SNAPSHOT =====`);
-  console.log(`[reconnect] socketId: ${socket.id}`);
-  console.log(`[reconnect] roomState: ${snapshot.roomState}`);
-  console.log(`[reconnect] inRoundData exists: ${!!snapshot.inRoundData}`);
+  logger.debug(`[reconnect] ===== SENDING SNAPSHOT =====`);
+  logger.debug(`[reconnect] socketId: ${socket.id}`);
+  logger.debug(`[reconnect] roomState: ${snapshot.roomState}`);
+  logger.debug(`[reconnect] inRoundData exists: ${!!snapshot.inRoundData}`);
   if (snapshot.inRoundData) {
-    console.log(`[reconnect] phase: ${snapshot.inRoundData.phase}`);
-    console.log(`[reconnect] isJudge: ${snapshot.inRoundData.isJudge}`);
-    console.log(`[reconnect] answersForRanking exists: ${!!snapshot.inRoundData.answersForRanking}`);
-    console.log(`[reconnect] answersForRanking length: ${snapshot.inRoundData.answersForRanking?.length}`);
+    logger.debug(`[reconnect] phase: ${snapshot.inRoundData.phase}`);
+    logger.debug(`[reconnect] isJudge: ${snapshot.inRoundData.isJudge}`);
+    logger.debug(`[reconnect] answersForRanking exists: ${!!snapshot.inRoundData.answersForRanking}`);
+    logger.debug(`[reconnect] answersForRanking length: ${snapshot.inRoundData.answersForRanking?.length}`);
   }
-  console.log(`[reconnect] =====================================`);
+  logger.debug(`[reconnect] =====================================`);
   socket.emit("reconnect_state", snapshot);
   
   broadcastRoom(roomId, rooms, io);
@@ -188,7 +191,7 @@ export function handleDisconnect(socketId, rooms, io, beginNextTurn, cancelStart
   
   if (!player) return;
   
-  console.log(`[disconnect] ${player.name} (${socketId}) from room ${disconnectedRoomId}`);
+  logger.debug(`[disconnect] ${player.name} (${socketId}) from room ${disconnectedRoomId}`);
   
   // Mark player as disconnected
   player.connected = false;
@@ -196,7 +199,7 @@ export function handleDisconnect(socketId, rooms, io, beginNextTurn, cancelStart
   
   // Start grace timer for ALL players (including judges)
   // They have 60 seconds to reconnect
-  player._graceTimer = setTimeout(() => {
+  player._graceTimer = safeTimeout('rankly/reconnectService#1', () => {
     handlePermanentDisconnect(socketId, disconnectedRoomId, rooms, io, beginNextTurn, cancelStartCountdown, startRoundNow);
   }, DISCONNECT_GRACE_PERIOD);
   
@@ -216,7 +219,7 @@ export function handlePermanentDisconnect(socketId, roomId, rooms, io, beginNext
   if (!room || !room.players[socketId]) return;
   
   const player = room.players[socketId];
-  console.log(`[permanent disconnect] ${player.name} (${socketId}) from room ${roomId}`);
+  logger.debug(`[permanent disconnect] ${player.name} (${socketId}) from room ${roomId}`);
   
   // Clear grace timer
   if (player._graceTimer) {
@@ -241,7 +244,7 @@ export function handlePermanentDisconnect(socketId, roomId, rooms, io, beginNext
   
   // Check if room is now empty
   if (Object.keys(room.players).length === 0) {
-    console.log(`[room empty] Deleting room ${roomId}`);
+    logger.info(`[room empty] Deleting room ${roomId}`);
     if (room._startTimer) clearTimeout(room._startTimer);
     if (room._turnTimer) clearTimeout(room._turnTimer);
     if (room._nextRoundTimer) clearInterval(room._nextRoundTimer);
@@ -288,7 +291,7 @@ export function handlePermanentDisconnect(socketId, roomId, rooms, io, beginNext
     // If judge disconnected during answer phase
     if (wasJudge) {
       // Continue answer phase, reassign judge when ranking begins
-      console.log(`[judge disconnect] Judge disconnected during answer phase, will reassign at ranking`);
+      logger.debug(`[judge disconnect] Judge disconnected during answer phase, will reassign at ranking`);
     } else if (wasCurrentTurn) {
       // If it was their turn, advance to next turn
       clearTurnTimer(room);
@@ -323,11 +326,11 @@ export function handlePermanentDisconnect(socketId, roomId, rooms, io, beginNext
   if (room.state === ROOM_STATES.IN_ROUND && room.round && wasJudge) {
     const inRankingPhase = (room.round.phase === ROUND_PHASES.RANKING);
     
-    console.log(`[handlePermanentDisconnect] CASE D: wasJudge=${wasJudge}, phase=${room.round.phase}, inRankingPhase=${inRankingPhase}`);
+    logger.debug(`[handlePermanentDisconnect] CASE D: wasJudge=${wasJudge}, phase=${room.round.phase}, inRankingPhase=${inRankingPhase}`);
     
     if (inRankingPhase) {
       // Judge disconnected during ranking phase
-      console.log(`[judge disconnect] ⚠️ Judge disconnected during ranking phase - reassigning or skipping`);
+      logger.debug(`[judge disconnect] ⚠️ Judge disconnected during ranking phase - reassigning or skipping`);
       
       // Check if we have enough players to continue
       const connectedCount = countConnectedPlayers(room);
@@ -352,7 +355,7 @@ export function handlePermanentDisconnect(socketId, roomId, rooms, io, beginNext
       
       if (!newJudge) {
         // No one available to judge - skip this round and move to next
-        console.log(`[judge disconnect] No judge available - skipping round`);
+        logger.debug(`[judge disconnect] No judge available - skipping round`);
         
         const idx = room.currentRoundIndex;
         const total = room.rules.numRounds;
@@ -400,7 +403,7 @@ export function handlePermanentDisconnect(socketId, roomId, rooms, io, beginNext
             room._nextRoundTimer = null;
           }
           
-          const nextRoundInterval = setInterval(() => {
+          const nextRoundInterval = safeInterval('rankly/reconnectService#2', () => {
             countdown--;
             io.to(roomId).emit("next_round_countdown", { seconds: countdown });
             
@@ -410,7 +413,7 @@ export function handlePermanentDisconnect(socketId, roomId, rooms, io, beginNext
               
               // Auto-start next round
               if (room.state === ROOM_STATES.BETWEEN_ROUNDS && room.currentRoundIndex < room.questions.length) {
-                console.log(`[auto-advance] Starting round ${room.currentRoundIndex + 1} after skipped round`);
+                logger.debug(`[auto-advance] Starting round ${room.currentRoundIndex + 1} after skipped round`);
                 startRoundNow(roomId);
               }
             }
@@ -427,15 +430,15 @@ export function handlePermanentDisconnect(socketId, roomId, rooms, io, beginNext
       }
       
       // New judge assigned - notify and continue ranking
-      console.log(`[judge disconnect] New judge assigned: ${newJudge}`);
+      logger.debug(`[judge disconnect] New judge assigned: ${newJudge}`);
       const answers = room.round.answers || [];
       
       // Clear old ranking timer and start new one for new judge
       clearRankingTimer(room);
       
       room._rankingStartedAt = Date.now();
-      room._rankingTimer = setTimeout(async () => {
-        console.log(`[ranking timeout] New judge did not rank in time - auto-ranking randomly`);
+      room._rankingTimer = safeTimeout('rankly/reconnectService#3', async () => {
+        logger.debug(`[ranking timeout] New judge did not rank in time - auto-ranking randomly`);
         const { autoRankAnswers } = await import("./gameEngine.js");
         autoRankAnswers(roomId, rooms, io);
       }, RANKING_TIME);
@@ -499,7 +502,7 @@ export function handlePermanentDisconnect(socketId, roomId, rooms, io, beginNext
     }
     
     // Enough players to continue (3+)
-    console.log(`[between_rounds disconnect] ${connectedCount} players remaining - continuing game`);
+    logger.debug(`[between_rounds disconnect] ${connectedCount} players remaining - continuing game`);
     
     // Promote new host if needed
     if (wasHost) {

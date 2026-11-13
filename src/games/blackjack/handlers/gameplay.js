@@ -5,6 +5,7 @@ const { savePlayerToken, updateState } = require('../roomState');
 const { processRouletteChoice } = require('../roulette');
 const { ACTION_COOLDOWN_MS, rooms } = require('../state');
 const { nextTurn, startRound } = require('../turns');
+const logger = require('../../../shared/logger');
 
 function register(socket) {
 
@@ -110,27 +111,27 @@ function register(socket) {
 
     const player = room.players[socket.id];
     if (!player || !player.host) {
-      console.log(`[ELIMINATION MODE] Non-host ${socket.id} tried to change elimination mode`);
+      logger.debug(`[ELIMINATION MODE] Non-host ${socket.id} tried to change elimination mode`);
       return;
     }
 
     // Only allow changes in lobby phase
     if (room.phase !== 'lobby' || room.roundActive) {
-      console.log(`[ELIMINATION MODE] Cannot change mode during active game`);
+      logger.debug(`[ELIMINATION MODE] Cannot change mode during active game`);
       socket.emit('eliminationModeError', 'Cannot change elimination mode during active game');
       return;
     }
 
     // Validate mode
     if (!['standard', 'lowestHand'].includes(mode)) {
-      console.log(`[ELIMINATION MODE] Invalid mode: ${mode}`);
+      logger.debug(`[ELIMINATION MODE] Invalid mode: ${mode}`);
       socket.emit('eliminationModeError', 'Invalid elimination mode');
       return;
     }
 
     // Update room rules
     room.rules.eliminationMode = mode;
-    console.log(`[ELIMINATION MODE] Host ${player.name} set elimination mode to: ${mode}`);
+    logger.debug(`[ELIMINATION MODE] Host ${player.name} set elimination mode to: ${mode}`);
 
     // Notify all players
     ctx.io.to(roomCode).emit('eliminationModeChanged', {
@@ -189,7 +190,7 @@ function register(socket) {
       playerId: socket.id
     });
 
-    console.log(`[SPECTATOR] ${player.name} reacted with ${emoji}`);
+    logger.debug(`[SPECTATOR] ${player.name} reacted with ${emoji}`);
   });
 }
 
