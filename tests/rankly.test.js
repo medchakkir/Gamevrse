@@ -306,3 +306,27 @@ test('registry: all three games are attached; admin route is mounted; shutdown c
   rankly.shutdown();
   assert.strictEqual(timers.activeTimerCount('rankly/'), 0);
 });
+
+// ---- start_game fix: a `question` field in normal mode used to throw (const reassignment) ----
+test('start_game: normal mode ignores a client-supplied question and still starts the countdown', async () => {
+  const { host, roomId } = await makeRoom();
+  await addGuest(roomId, 'A');
+  await addGuest(roomId, 'B');
+  const countdown = once(host, 'start_countdown');
+  host.emit('start_game', { roomId, minPlayers: 3, turnTime: 30000, multiplier: 1, numRounds: 3, question: '  my custom question  ' });
+  const c = await countdown;
+  assert.ok(c && typeof c === 'object');
+  // The supplied question is not used: the countdown carries a built-in question, not the client's text.
+  assert.ok(!JSON.stringify(c).includes('my custom question'));
+});
+
+test('start_game: whitespace-only or null question in normal mode also starts', async () => {
+  for (const question of ['   ', null, '']) {
+    const { host, roomId } = await makeRoom();
+    await addGuest(roomId, 'A');
+    await addGuest(roomId, 'B');
+    const countdown = once(host, 'start_countdown');
+    host.emit('start_game', { roomId, minPlayers: 3, turnTime: 30000, multiplier: 1, numRounds: 3, question });
+    await countdown;
+  }
+});

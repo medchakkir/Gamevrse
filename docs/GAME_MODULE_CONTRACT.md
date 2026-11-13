@@ -55,10 +55,7 @@ Not done: active rooms are still lost on shutdown (no persistence), and clients 
 
 ## Rankly notes (observed, not changed)
 
-- **Bug (pending):** in normal mode, `start_game` with a non-empty `question` throws
-  `TypeError: Assignment to constant variable` (`question` is destructured with `const`, then
-  reassigned), the error is swallowed by the handler guard, and the game silently never starts. The client
-  sends `question: questionInput.value.trim()` in normal mode, so this triggers if that field has text.
+- (fixed) In normal mode, `start_game` with a non-empty `question` used to throw (`const` reassignment) and silently never start; the field is now ignored.
 - `start_game` stores the client's `minPlayers`, `turnTime` and `multiplier` in the room rules without validation.
 - Room codes are `nanoid(6).toUpperCase()`, so they can contain `_` and `-`.
 - `kick_player` keeps no ban list: a kicked player can rejoin.

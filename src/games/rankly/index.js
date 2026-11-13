@@ -548,7 +548,7 @@ const onConnection = socket => {
   // START GAME (HOST)
   // -----------------------------------------------------------
   socket.on("start_game", (payload) => {
-    const { roomId, question, customQuestions, minPlayers, turnTime, multiplier, numRounds } = payload ?? {};
+    const { roomId, customQuestions, minPlayers, turnTime, multiplier, numRounds } = payload ?? {};
     const room = rooms[roomId];
     if (!room) return;
     if (socket.id !== room.hostSocketId) return;
@@ -597,11 +597,7 @@ const onConnection = socket => {
       logger.debug(`[start_game] Custom Mode: ${validation.questions.length} questions validated and loaded`);
     } else {
       // 🎮 NORMAL MODE: Use built-in questions
-      // Reject custom questions in Normal Mode
-      if (question && question.trim()) {
-        question = null; // Silently ignore custom question
-      }
-      
+      // A client-supplied `question` is ignored in Normal Mode (it is not even read).
       room.questions = prepareRoomQuestions(room, numRounds);
       room.pendingQuestion = room.questions[0];
     }
