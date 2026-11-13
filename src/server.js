@@ -7,6 +7,7 @@ const compression = require('compression');
 const { Server } = require('socket.io');
 const config = require('./config');
 const logger = require('./shared/logger');
+const { createRegistry } = require('./games/registry');
 
 // Wraps every listener a game registers with socket.on so a thrown error (or a
 // rejected promise) is logged instead of crashing the process. Must be attached
@@ -56,10 +57,13 @@ async function createApp() {
   const server = http.createServer(app);
   const io = new Server(server);
 
-  for (const ns of ['/colorrush', '/blackjack', '/rankly']) guardNamespace(io.of(ns));
+  for (const ns of ['/colorrush', '/rankly']) guardNamespace(io.of(ns));
 
   require('./games/colorrush').attach(io.of('/colorrush'));
-  require('./games/blackjack').attach(io.of('/blackjack'));
+  // Blackjack is the first game on the registry (proof of concept for the game-module contract).
+  const registry = createRegistry();
+  registry.register(require('./games/blackjack/module'));
+  await registry.attach('blackjack', io, app, guardNamespace);
   // Rankly is an ES module (nanoid is ESM-only), so it is loaded dynamically.
   const rankly = await import('./games/rankly/index.js');
   rankly.attach(io.of('/rankly'), app);
