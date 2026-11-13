@@ -27,7 +27,7 @@ time, once the games are migrated and covered by tests.
 |---|---|---|
 | Blackjack | yes (`src/games/blackjack/module.js`) | adapter only; events, payloads and rules unchanged |
 | ColorRush | yes (`src/games/colorrush/module.js`) | adapter only; events, payloads and rules unchanged |
-| Rankly | no | ESM; needs the CJS/ESM boundary resolved first |
+| Rankly | yes (`src/games/rankly/module.cjs`) | adapter only; the descriptor is `.cjs` because `src/games/rankly` is an ESM package, and it loads the game with a dynamic `import()` |
 
 ## Known behaviours: preserved during migration, then fixed or pending
 
@@ -41,10 +41,10 @@ time, once the games are migrated and covered by tests.
 `createApp()` returns `shutdown()`; `npm start` calls it on SIGTERM/SIGINT (a second signal, or 10 s
 without finishing, forces exit 1). Order: stop accepting connections and disconnect sockets, let
 disconnect handlers run, call each registered game's `shutdown()`, then clear every remaining tracked
-timer (covers Rankly, which is not on the registry yet). Timers are tracked by
+timer (safety net). Timers are tracked by
 `src/shared/timers.js` (`safeTimeout`/`safeInterval`, labelled `<game>/...`).
 
-Not done: Rankly has no `shutdown()` yet (only the global timer clear); active rooms are still lost on shutdown (no persistence), and clients get no
+Not done: active rooms are still lost on shutdown (no persistence), and clients get no
 "server restarting" event; they just see a disconnect.
 
 ## ColorRush notes (observed, not changed)
@@ -52,3 +52,15 @@ Not done: Rankly has no `shutdown()` yet (only the global timer clear); active r
 - Room codes still come from ColorRush's own `Math.random` generator (always 6 chars, so not broken).
 - `kickPlayer` keeps no ban list: a kicked player can rejoin the same room immediately.
 - ColorRush has no spectator role; joining a game in progress is rejected (`Game is already in progress`).
+
+## Rankly notes (observed, not changed)
+
+- **Bug (pending):** in normal mode, `start_game` with a non-empty `question` throws
+  `TypeError: Assignment to constant variable` (`question` is destructured with `const`, then
+  reassigned), the error is swallowed by the handler guard, and the game silently never starts. The client
+  sends `question: questionInput.value.trim()` in normal mode, so this triggers if that field has text.
+- `start_game` stores the client's `minPlayers`, `turnTime` and `multiplier` in the room rules without validation.
+- Room codes are `nanoid(6).toUpperCase()`, so they can contain `_` and `-`.
+- `kick_player` keeps no ban list: a kicked player can rejoin.
+- No player cap is enforced.
+- Rankly keeps its `rooms` map private to the module; tests are wire-level only.

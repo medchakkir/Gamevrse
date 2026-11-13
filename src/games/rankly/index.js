@@ -793,6 +793,11 @@ const onConnection = socket => {
   });
 };
 
+// Active room ids (used by the game-module descriptor, module.cjs).
+export function listRooms() {
+  return Object.keys(rooms);
+}
+
 export function attach(namespace, app) {
   io = namespace;
   setupAdminRoutes(app);

@@ -58,16 +58,13 @@ async function createApp() {
   const server = http.createServer(app);
   const io = new Server(server);
 
-  guardNamespace(io.of('/rankly')); // Rankly is not on the registry yet (ES module)
-
+  // Every game is registered and attached through the registry. Rankly's descriptor is a
+  // .cjs file that loads the ES-module game (nanoid is ESM-only) with a dynamic import().
   const registry = createRegistry();
-  for (const mod of [require('./games/colorrush/module'), require('./games/blackjack/module')]) {
+  for (const mod of [require('./games/colorrush/module'), require('./games/blackjack/module'), require('./games/rankly/module.cjs')]) {
     registry.register(mod);
     await registry.attach(mod.id, io, app, guardNamespace);
   }
-  // Rankly is an ES module (nanoid is ESM-only), so it is loaded dynamically.
-  const rankly = await import('./games/rankly/index.js');
-  rankly.attach(io.of('/rankly'), app);
 
   // Graceful shutdown: stop accepting connections, disconnect sockets, then clear
   // game timers (after the disconnect handlers have run, since they schedule timers).
@@ -81,7 +78,7 @@ async function createApp() {
       server.closeAllConnections?.();
       await new Promise((resolve) => setImmediate(resolve));
       await registry.shutdownAll();
-      clearTimers(); // games not yet on the registry (Rankly)
+      clearTimers(); // safety net for any timer a game's shutdown() missed
     })();
     return stopping;
   }

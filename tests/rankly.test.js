@@ -288,3 +288,21 @@ test('chat: messages stay inside the room', async () => {
   await sleep(150);
   assert.strictEqual(leaked, false);
 });
+
+test('registry: all three games are attached; admin route is mounted; shutdown clears Rankly timers', async () => {
+  const rankly = require('../src/games/rankly/module.cjs');
+  const timers = require('../src/shared/timers');
+  // /admin/add-question exists (403 without a token, not 404).
+  const res = await fetch(`${base}/admin/add-question`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+  assert.strictEqual(res.status, 403);
+
+  const { host, roomId } = await makeRoom();
+  await addGuest(roomId, 'A');
+  await addGuest(roomId, 'B');
+  assert.ok(rankly.listRooms().includes(roomId), 'listRooms sees the active room');
+  host.emit('start_game', { roomId, minPlayers: 3, turnTime: 30000, multiplier: 1, numRounds: 3 });
+  await once(host, 'start_countdown');
+  assert.ok(timers.activeTimerCount('rankly/') > 0, 'the 60s start countdown timer is tracked');
+  rankly.shutdown();
+  assert.strictEqual(timers.activeTimerCount('rankly/'), 0);
+});

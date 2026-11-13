@@ -4,6 +4,7 @@ const { validateGameModule } = require('../src/games/game-interface');
 const { createRegistry } = require('../src/games/registry');
 const blackjack = require('../src/games/blackjack/module');
 const colorrush = require('../src/games/colorrush/module');
+const rankly = require('../src/games/rankly/module.cjs');
 const timers = require('../src/shared/timers');
 
 const good = () => ({
@@ -76,5 +77,23 @@ test('colorrush shutdown clears only colorrush timers', () => {
   colorrush.shutdown();
   assert.strictEqual(timers.activeTimerCount('colorrush/'), 0);
   assert.strictEqual(timers.activeTimerCount('blackjack/'), 1);
+  timers.clearTimers();
+});
+
+test('rankly descriptor satisfies the contract and declares what the game enforces', () => {
+  assert.deepStrictEqual(validateGameModule(rankly), []);
+  assert.strictEqual(rankly.id, 'rankly');
+  assert.deepStrictEqual(rankly.config, { minPlayers: 3, maxPlayers: null, supportsSpectators: false });
+  assert.deepStrictEqual(rankly.listRooms(), [], 'empty (and safe) before attach');
+});
+
+test('rankly shutdown clears only rankly timers', () => {
+  timers.clearTimers();
+  timers.safeTimeout('rankly/test', () => {}, 1000);
+  timers.safeInterval('rankly/test2', () => {}, 1000);
+  timers.safeTimeout('colorrush/test', () => {}, 1000);
+  rankly.shutdown();
+  assert.strictEqual(timers.activeTimerCount('rankly/'), 0);
+  assert.strictEqual(timers.activeTimerCount('colorrush/'), 1);
   timers.clearTimers();
 });
