@@ -166,16 +166,9 @@ reassignHost(room);
     return socket.emit('roomError', 'You cannot join this room because you were previously removed by the host');
   }
   
-  // Step 6: Check identity-based ban (more persistent)
-  const playerIP = socket.handshake?.address || 'unknown';
-  if (room.bannedIdentities) {
-    // We'll check the name after they set it, but for now check IP-only bans
-    const ipBans = Array.from(room.bannedIdentities.values()).filter(ban => ban.ip === playerIP);
-    if (ipBans.length > 0) {
-      logger.debug(`[JOIN] Blocked player with banned IP ${playerIP} from rejoining room ${cleanCode}`);
-      return socket.emit('roomError', 'You cannot join this room because you were previously removed by the host');
-    }
-  }
+  // Step 6: Identity bans (name + IP, set by kickPlayer) are enforced in setName, once the
+  // joiner's name is known. They are deliberately NOT checked here by IP alone: that would
+  // lock out every unrelated player behind the same NAT/proxy as a kicked player.
 
     socket.join(cleanCode);
     socket.data.roomCode = cleanCode;

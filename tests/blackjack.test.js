@@ -379,3 +379,51 @@ test('createRoom: code is always 6 chars even when Math.random yields a short ba
   g.emit('joinRoom', roomCode);
   assert.strictEqual((await joined).roomCode, roomCode);
 });
+
+// ---- Kick bans (fix: an IP-only check in joinRoom locked out unrelated players on the same IP) ----
+// All test clients share one IP, which is exactly the shared-NAT/proxy situation.
+async function kickGuest(host, g, roomCode) {
+  const kicked = once(g, 'kicked');
+  host.emit('kickPlayer', g.id);
+  await kicked;
+  assert.ok(bjState.rooms[roomCode].bannedIdentities.size >= 1, 'identity ban recorded');
+}
+
+test('kick: a different player on the same IP can still join the room', async () => {
+  const { host, roomCode } = await makeRoom();
+  const { g } = await addGuest(roomCode, 'Troll');
+  await kickGuest(host, g, roomCode);
+
+  const bystander = await client();
+  const joined = once(bystander, 'roomJoined');
+  bystander.emit('joinRoom', roomCode);
+  assert.strictEqual((await joined).roomCode, roomCode);
+  bystander.emit('setName', 'Bystander');
+  const st = await stateWhere(host, (s) => s.players.some((p) => p.name === 'Bystander'));
+  assert.strictEqual(st.players.length, 2);
+});
+
+test('kick: the same name from the same IP is still blocked at setName (identity ban preserved)', async () => {
+  const { host, roomCode } = await makeRoom();
+  const { g } = await addGuest(roomCode, 'Troll');
+  await kickGuest(host, g, roomCode);
+
+  const again = await client();
+  const joined = once(again, 'roomJoined');
+  again.emit('joinRoom', roomCode);
+  await joined;
+  const kicked = once(again, 'kicked');
+  again.emit('setName', 'troll'); // ban key is case-insensitive
+  assert.deepStrictEqual(await kicked, { hostName: 'System' });
+  await sleep(100);
+  assert.ok(!host.lastState.players.some((p) => p.id === again.id), 'banned identity removed from the room');
+});
+
+test('kick: the kicked socket itself cannot rejoin the room', async () => {
+  const { host, roomCode } = await makeRoom();
+  const { g } = await addGuest(roomCode, 'Troll');
+  await kickGuest(host, g, roomCode);
+  const err = once(g, 'roomError');
+  g.emit('joinRoom', roomCode);
+  assert.match(await err, /previously removed by the host/);
+});

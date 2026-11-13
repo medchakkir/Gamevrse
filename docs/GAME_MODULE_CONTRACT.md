@@ -33,4 +33,5 @@ time, once the games are migrated and covered by tests.
 
 - (fixed) Blackjack `hit`/`stand` now require it to be the caller's turn.
 - (fixed) Blackjack room codes are now always 6 characters from a CSPRNG (`src/shared/roomCode.js`).
-- Blackjack kicks ban by IP.
+- (fixed) Blackjack no longer blocks joins by IP alone; kicks ban the socket id and the name+IP identity (enforced at setName).
+- (pending) Blackjack `unbanPlayer` clears only the socket-id ban; the name+IP identity ban remains, so an unbanned player who re-enters the same name is kicked again.
