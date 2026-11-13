@@ -56,6 +56,7 @@ function register(socket) {
   const room = rooms[socket.data.roomCode];
   const p = room?.players[socket.id];
   if (!p || !room.roundActive || room.triggerLocked) return;
+  if (room.currentPlayerOrder[room.turnIndex] !== socket.id) return; // only the player whose turn it is may act
 
 
   const now = Date.now();
@@ -87,6 +88,7 @@ function register(socket) {
   const room = rooms[socket.data.roomCode];
   const p = room?.players[socket.id];
   if (!p || !room.roundActive || room.triggerLocked) return;
+  if (room.currentPlayerOrder[room.turnIndex] !== socket.id) return; // only the player whose turn it is may act
 
 
   const now = Date.now();

@@ -307,3 +307,53 @@ test('setEliminationMode: only the host may change it', async () => {
   assert.deepStrictEqual(await evt, { mode: 'lowestHand', hostName: 'Host' });
   assert.strictEqual(bjState.rooms[roomCode].rules.eliminationMode, 'lowestHand');
 });
+
+// ---- Turn enforcement (fix: hit/stand were accepted from players whose turn it was not) ----
+async function startTwoPlayerRound() {
+  const { host, roomCode } = await makeRoom();
+  const { g } = await addGuest(roomCode, 'Guest');
+  host.emit('toggleReady');
+  g.emit('toggleReady');
+  const st = await stateWhere(host, (s) => s.roundActive === true && s.currentTurn, 5000);
+  const byId = { [host.id]: host, [g.id]: g };
+  const current = byId[st.currentTurn];
+  const other = current === host ? g : host;
+  await sleep(100); // let the opening state broadcast settle
+  return { host, g, current, other, roomCode };
+}
+
+test('turn: stand from a player whose turn it is not is ignored', async () => {
+  const { host, current, other, roomCode } = await startTwoPlayerRound();
+  const before = bjState.rooms[roomCode];
+  const handBefore = before.players[other.id].hand.length;
+  other.emit('stand');
+  await sleep(200);
+  assert.strictEqual(before.players[other.id].stood, false, 'out-of-turn stand must not mark the caller as stood');
+  assert.strictEqual(before.currentPlayerOrder[before.turnIndex], current.id, 'turn must not advance');
+  assert.strictEqual(before.players[other.id].hand.length, handBefore);
+  assert.strictEqual(host.lastState.currentTurn, current.id);
+});
+
+test('turn: hit from a player whose turn it is not draws no card and does not skip the real player', async () => {
+  const { current, other, roomCode } = await startTwoPlayerRound();
+  const room = bjState.rooms[roomCode];
+  const handBefore = room.players[other.id].hand.length;
+  const deckBefore = room.deck.length;
+  other.emit('hit');
+  await sleep(200);
+  assert.strictEqual(room.players[other.id].hand.length, handBefore, 'no card for the out-of-turn caller');
+  assert.strictEqual(room.deck.length, deckBefore, 'deck untouched');
+  assert.strictEqual(room.currentPlayerOrder[room.turnIndex], current.id, 'real current player keeps the turn');
+});
+
+test('turn: the current player can still hit and stand', async () => {
+  const { current, other, roomCode } = await startTwoPlayerRound();
+  const room = bjState.rooms[roomCode];
+  const before = room.players[current.id].hand.length;
+  current.emit('stand');
+  await sleep(200);
+  assert.strictEqual(room.players[current.id].stood, true);
+  assert.notStrictEqual(room.currentPlayerOrder[room.turnIndex], current.id, 'turn advanced after a valid stand');
+  assert.strictEqual(room.players[current.id].hand.length, before);
+  assert.ok(other);
+});
