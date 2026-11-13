@@ -26,7 +26,7 @@ time, once the games are migrated and covered by tests.
 | Game | On registry | Notes |
 |---|---|---|
 | Blackjack | yes (`src/games/blackjack/module.js`) | adapter only; events, payloads and rules unchanged |
-| ColorRush | no | still attached directly in `server.js` |
+| ColorRush | yes (`src/games/colorrush/module.js`) | adapter only; events, payloads and rules unchanged |
 | Rankly | no | ESM; needs the CJS/ESM boundary resolved first |
 
 ## Known behaviours: preserved during migration, then fixed or pending
@@ -41,8 +41,14 @@ time, once the games are migrated and covered by tests.
 `createApp()` returns `shutdown()`; `npm start` calls it on SIGTERM/SIGINT (a second signal, or 10 s
 without finishing, forces exit 1). Order: stop accepting connections and disconnect sockets, let
 disconnect handlers run, call each registered game's `shutdown()`, then clear every remaining tracked
-timer (covers ColorRush and Rankly, which are not on the registry yet). Timers are tracked by
+timer (covers Rankly, which is not on the registry yet). Timers are tracked by
 `src/shared/timers.js` (`safeTimeout`/`safeInterval`, labelled `<game>/...`).
 
-Not done: active rooms are still lost on shutdown (no persistence), and clients get no
+Not done: Rankly has no `shutdown()` yet (only the global timer clear); active rooms are still lost on shutdown (no persistence), and clients get no
 "server restarting" event; they just see a disconnect.
+
+## ColorRush notes (observed, not changed)
+
+- Room codes still come from ColorRush's own `Math.random` generator (always 6 chars, so not broken).
+- `kickPlayer` keeps no ban list: a kicked player can rejoin the same room immediately.
+- ColorRush has no spectator role; joining a game in progress is rejected (`Game is already in progress`).

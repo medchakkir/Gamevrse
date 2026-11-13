@@ -3,6 +3,8 @@ const assert = require('node:assert');
 const { validateGameModule } = require('../src/games/game-interface');
 const { createRegistry } = require('../src/games/registry');
 const blackjack = require('../src/games/blackjack/module');
+const colorrush = require('../src/games/colorrush/module');
+const timers = require('../src/shared/timers');
 
 const good = () => ({
   id: 'demo',
@@ -57,4 +59,22 @@ test('registry: attach runs prepare, then the module on namespace /<id>', async 
   await r.attach('demo', io, 'APP', (nsp) => calls.push(['prepare', nsp.name]));
   assert.deepStrictEqual(calls, [['prepare', '/demo'], ['attach', '/demo', 'APP']]);
   await assert.rejects(() => r.attach('missing', io, null), /Unknown game/);
+});
+
+test('colorrush descriptor satisfies the contract and declares what the game enforces', () => {
+  assert.deepStrictEqual(validateGameModule(colorrush), []);
+  assert.strictEqual(colorrush.id, 'colorrush');
+  assert.deepStrictEqual(colorrush.config, { minPlayers: 2, maxPlayers: 6, supportsSpectators: false });
+  assert.deepStrictEqual(colorrush.listRooms(), []);
+});
+
+test('colorrush shutdown clears only colorrush timers', () => {
+  timers.clearTimers();
+  timers.safeInterval('colorrush/test', () => {}, 1000);
+  timers.safeTimeout('colorrush/test2', () => {}, 1000);
+  timers.safeTimeout('blackjack/test', () => {}, 1000);
+  colorrush.shutdown();
+  assert.strictEqual(timers.activeTimerCount('colorrush/'), 0);
+  assert.strictEqual(timers.activeTimerCount('blackjack/'), 1);
+  timers.clearTimers();
 });

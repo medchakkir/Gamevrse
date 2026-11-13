@@ -58,13 +58,13 @@ async function createApp() {
   const server = http.createServer(app);
   const io = new Server(server);
 
-  for (const ns of ['/colorrush', '/rankly']) guardNamespace(io.of(ns));
+  guardNamespace(io.of('/rankly')); // Rankly is not on the registry yet (ES module)
 
-  require('./games/colorrush').attach(io.of('/colorrush'));
-  // Blackjack is the first game on the registry (proof of concept for the game-module contract).
   const registry = createRegistry();
-  registry.register(require('./games/blackjack/module'));
-  await registry.attach('blackjack', io, app, guardNamespace);
+  for (const mod of [require('./games/colorrush/module'), require('./games/blackjack/module')]) {
+    registry.register(mod);
+    await registry.attach(mod.id, io, app, guardNamespace);
+  }
   // Rankly is an ES module (nanoid is ESM-only), so it is loaded dynamically.
   const rankly = await import('./games/rankly/index.js');
   rankly.attach(io.of('/rankly'), app);
@@ -81,7 +81,7 @@ async function createApp() {
       server.closeAllConnections?.();
       await new Promise((resolve) => setImmediate(resolve));
       await registry.shutdownAll();
-      clearTimers(); // legacy games not yet on the registry (ColorRush, Rankly)
+      clearTimers(); // games not yet on the registry (Rankly)
     })();
     return stopping;
   }
